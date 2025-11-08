@@ -45,17 +45,17 @@ class _MasterDetailPageState extends State<MasterDetailPage> {
           // Left panel
           Container(
             width: 220,
-            color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.5),
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
             child: ListView.separated(
               itemCount: categories.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (ctx, i) {
                 final name = categories[i];
                 final selected = _selected == name;
                 return ListTile(
                   title: Text(name),
                   selected: selected,
-                  selectedTileColor: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                  selectedTileColor: Theme.of(context).colorScheme.primary,
                   onTap: () => setState(() => _selected = name),
                 );
               },
@@ -95,7 +95,7 @@ class UnusedCategoryListView extends StatelessWidget {
           return Center(child: Text('No $category found.'));
         }
 
-        return ListView.separated(itemCount: items.length, separatorBuilder: (_, __) => const Divider(height: 1), itemBuilder: (context, index) {
+        return ListView.separated(itemCount: items.length, separatorBuilder: (_, _) => const Divider(height: 1), itemBuilder: (context, index) {
             final item = items[index];
             return ListTile(title: Text(item), onTap: () {
                 // Optional: handle item tap
@@ -135,7 +135,8 @@ class CategoryListView extends StatelessWidget {
       final parts = item.split('|').map((s) => s.trim()).toList();
       primary = parts.first;
       secondary = parts.length > 1 ? parts[1] : null;
-      status = parts.length > 2 ? parts.sublist(2).join(' | ') : null;
+      // status = parts.length > 2 ? parts.sublist(2).join(' | ') : null;
+      status = parts.length > 2 ? parts[2].trim() : null;
     } else {
       // try to extract trailing status in parentheses, e.g. "domain (blocked)"
       final m = RegExp(r'^(.*?)(\s+\([^)]+\))$').firstMatch(item);

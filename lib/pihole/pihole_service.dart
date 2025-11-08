@@ -12,31 +12,36 @@ class PiHoleService {
         final res = await client.getGroups();
         return (res.groups ?? [])
             .map((g) => '${g.name ?? '(unnamed)'}'
-                '${g.enabled ? '' : ' (disabled)'}')
+                '|${g.description ?? ''}'
+                '|${g.enabled ? '(enabled)' : '(disabled)'}')
             .toList();
       case 'clients':
         final res = await client.getClients();
         return (res.clients ?? [])
             .map((c) => '${c.hostname ?? c.hwaddr ?? 'unknown'}'
-                '${c.comment != null ? ' — ${c.comment}' : ''}')
+                '|${c.comment ?? ''}|'
+                '')
             .toList();
       case 'domains':
         final res = await client.getDomains();
         return (res.domains ?? [])
-            .map((d) => '${d.name ?? '(unknown)'} [${d.kind ?? d.type ?? ''}]'
-                '${d.enabled ? '' : ' (disabled)'}')
+            .map((d) => '${d.name?.replaceAll(r"|", "I").toString() ?? '(unknown)'}'
+                // '${d.comment ?? '|'} ${d.comment != null ? '|' : ''}'
+                '|[${d.kind ?? d.type ?? ''}] ${d.comment ?? ''}'
+                '|${d.enabled ? '(enabled)' : '(disabled)'}')
             .toList();
       case 'network':
         final res = await client.getNetworkDevices();
         return (res.devices ?? [])
             .map((n) => '${n.ips?[0].name ?? n.ips?[0].ip ?? n.hwAddr ?? 'network'}'
-                '${n.interface != null ? ' - ${n.numQueries}' : ''}')
+                '|${n.interface != null ? '${n.numQueries}' : ''}|')
             .toList();
       case 'queries':
         final res = await client.getQueries();
         return (res.queries ?? [])
-            .map((q) => '${q.domain} (${q.status})'
-                '${q.client.name != null ? ' — ${q.client.name}' : ''}')
+            .map((q) => '${q.domain}'
+                '|${q.client.name ?? ''}'
+                '|${q.status ?? ''}')
             .toList();
 
       case 'system':
