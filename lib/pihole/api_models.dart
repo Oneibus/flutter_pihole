@@ -266,7 +266,7 @@ class NetworkDevicesResponse {
 
 class NetworkDevice {
   final int id;
-  final String? hwAddr; // "hwaddr"
+  final String? hwAddr; // "hwAddr"
   final String? interface;
   final int firstSeen; // epoch seconds?
   final int lastQuery; // epoch seconds?
