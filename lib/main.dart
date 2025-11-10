@@ -397,8 +397,8 @@ class DataService {
     }
   })();
 
-  static final String baseUrl = _env['PIHOLE_APP_HOSTURL'] ?? 'http://localhost';
-  static final String appPassword = _env['PIHOLE_APP_PASSWORD'] ?? 'generated_app_password';
+  static final String baseUrl = _env['PIHOLE_APP_HOSTURL'] ?? 'http://pidns.lan';
+  static final String appPassword = _env['PIHOLE_APP_PASSWORD'] ?? '5OAsXwzdYFj1X2gweVzV9vtayAVWoF1AwSKvBhJx/2w=';
 
   static final _service = PiHoleService(
     PiHoleClient(
