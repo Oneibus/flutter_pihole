@@ -1,9 +1,27 @@
+import 'package:flutter_pihole_client/pihole/api_models.dart';
+
 import 'pihole_client.dart';
 
 class PiHoleService {
   final PiHoleClient client;
 
   PiHoleService(this.client);
+
+  // Convenience: map categories in your UI to calls
+  Future<bool> updateCategoryItem(String category, String group, {Map<String, Object?>? props}) async {
+    final catName = category.toLowerCase();
+    switch (catName) {
+      case 'groups':
+        final res = await client.putCategoryItem(category: catName, group: group, props: props ?? {});
+        bool saved = res.status == 'success';
+        return saved;
+      case 'domains':
+        final res = await client.putCategoryItem(category: catName, group: group, props: props ?? {});
+        bool saved = res.status == 'success';
+        return saved;
+    }
+    return false;
+  }
 
   // Convenience: map categories in your UI to calls
   Future<List<String>> listForCategory(String category) async {

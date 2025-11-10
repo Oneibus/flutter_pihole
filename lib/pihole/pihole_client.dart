@@ -57,7 +57,6 @@ class PiHoleClient {
     return authResponse.session?.sid ?? "";
   }
 
-
   Future<Map<String, dynamic>> _get(String path, {Map<String, String>? query}) async {
     _authSID ??= (await authenticate(password: appPassword));
     query = {...?query, 'sid': _authSID!};
@@ -71,6 +70,28 @@ class PiHoleClient {
     if (decoded is Map<String, dynamic>) return decoded;
     // Wrap non-object JSON into an object for model parsers expecting a map.
     return {'data': decoded};
+  }
+
+  Future<Map<String, dynamic>> _put(String path, {Map<String, Object?>? body}) async {
+    _authSID ??= (await authenticate(password: appPassword));
+    body = {...?body, 'sid': _authSID!};
+
+    final jsonBody = json.encode(body, toEncodable: (object) => object.toString());
+
+    final res = await _http.put(_uri("/$path"), body: jsonBody, headers: _headers);
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw PiHoleHttpException(res.statusCode, res.body, path);
+    }
+
+    final decoded = json.decode(res.body);
+    if (decoded is Map<String, dynamic>) return decoded;
+    // Wrap non-object JSON into an object for model parsers expecting a map.
+    return {'data': decoded};
+  }
+
+  Future<StatusResponse> putCategoryItem({required String category, required String group, required Map<String, Object?> props}) async {
+    final jsonMap = await _put('$category/$group', body: props);
+    return StatusResponse.fromJson(jsonMap);
   }
 
   Future<GroupsResponse> getGroups() async {
