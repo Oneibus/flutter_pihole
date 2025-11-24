@@ -1,8 +1,11 @@
 import 'dart:io' show Platform;
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'pihole/pihole_service.dart';
 import 'pihole/pihole_client.dart';
+import 'pihole/system_events.dart';
 import 'widgets/edit_item_dialog.dart';
+import 'widgets/system_dialog.dart';
 
 void main() {
   runApp(const MyApp());
@@ -35,8 +38,119 @@ class _MasterDetailPageState extends State<MasterDetailPage> {
     'Queries',
     'System',
   ];
+
   static String _selected = categories.first;
   int _refreshKey = 0; // Key to force refresh
+  bool _isRebooting = false; // Track reboot state
+
+  StreamSubscription<RebootEvent>? _rebootSubscription;
+  StreamSubscription<ServiceReadinessEvent>? _serviceSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _setupEventListeners();
+  }
+
+  // Setup listeners for system events and show SnackBars accordingly
+  //
+  void _setupEventListeners() {
+    // Listen to reboot events
+    _rebootSubscription = DataService.systemEvents.rebootStream.listen((event) {
+      if (!mounted) return;
+
+      String message;
+      Color backgroundColor;
+
+      switch (event.state) {
+        case RebootState.started:
+          message = event.message ?? 'Starting system reboot...';
+          backgroundColor = Colors.orange;
+          setState(() {
+            _isRebooting = true;
+          });
+          break;
+        case RebootState.pending:
+          message = event.message ?? 'System is rebooting...';
+          backgroundColor = Colors.orange;
+          setState(() {
+            _isRebooting = true;
+          });
+          break;
+        case RebootState.complete:
+          message = event.message ?? 'Reboot completed successfully';
+          backgroundColor = Colors.green;
+          // Trigger a refresh when reboot completes
+          setState(() {
+            _isRebooting = false;
+            _refreshKey++;
+          });
+          break;
+        case RebootState.failed:
+          message = event.message ?? 'Reboot failed';
+          backgroundColor = Colors.red;
+          setState(() {
+            _isRebooting = false;
+          });
+          break;
+        case RebootState.idle:
+          setState(() {
+            _isRebooting = false;
+          });
+          return; // Don't show snackbar for idle state
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: backgroundColor,
+          duration: event.state == RebootState.pending 
+              ? const Duration(seconds: 5) 
+              : const Duration(seconds: 3),
+        ),
+      );
+    });
+
+    // Listen to service readiness events
+    _serviceSubscription = DataService.systemEvents.serviceStream.listen((event) {
+      if (!mounted) return;
+
+      String message;
+      Color backgroundColor;
+
+      switch (event.state) {
+        case ServiceState.checking:
+          message = event.message ?? 'Checking service status...';
+          backgroundColor = Colors.blue;
+          break;
+        case ServiceState.ready:
+          message = event.message ?? 'Service is ready';
+          backgroundColor = Colors.green;
+          break;
+        case ServiceState.unavailable:
+          message = event.message ?? 'Service unavailable';
+          backgroundColor = Colors.red;
+          break;
+        case ServiceState.unknown:
+          return; // Don't show snackbar for unknown state
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: backgroundColor,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _rebootSubscription?.cancel();
+    _serviceSubscription?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,8 +175,7 @@ class _MasterDetailPageState extends State<MasterDetailPage> {
         children: [
           // Left panel
           Container(
-            width: 200,
-            // padding: EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+            width: 160,
             color: Theme.of(context).colorScheme.surfaceContainerHighest,
             child: ListView.separated(
               itemCount: categories.length,
@@ -74,10 +187,22 @@ class _MasterDetailPageState extends State<MasterDetailPage> {
                 return SizedBox(
                   height: 40, // Fixed height of 40 pixels
                   child: ListTile(
-                    title: Text(name, style: const TextStyle(fontSize: 12, color: Colors.black)),
+                    title: Text(
+                      name, 
+                      style: TextStyle(
+                        fontSize: selected ? 14 : 12,
+                        color: selected ? Colors.green[900] : Colors.black,
+                        fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
                     selected: selected,
-                    selectedTileColor: Theme.of(context).colorScheme.surfaceBright,
-                    onTap: () => setState(() => _selected = name),
+                    selectedTileColor: Colors.green[200],
+                    enabled: !_isRebooting, // Disable during reboot
+                    onTap: _isRebooting ? null : () {
+                      setState(() {
+                        _selected = name;
+                      });
+                    },
                   ),
                 );
               },
@@ -89,6 +214,7 @@ class _MasterDetailPageState extends State<MasterDetailPage> {
             child: CategoryListView(
               key: ValueKey('$_selected-$_refreshKey'), // Force rebuild when key changes
               category: _selected,
+              isRebooting: _isRebooting,
               onItemUpdate: (category, initialName, props) async {
                 await DataService.updateItem(category, initialName, props: props);
                 // Trigger refresh after update
@@ -101,11 +227,11 @@ class _MasterDetailPageState extends State<MasterDetailPage> {
         ],
       ),
       bottomNavigationBar: BottomAppBar(
-        height: 64,
+        height: 48,
         child: Padding(
-          padding: const EdgeInsets.all(4.0),
+          padding: const EdgeInsets.all(2.0),
           child: NavigationToolbar(
-            middle: Text('Connected to: ${DataService.baseUrl}'),
+            middle: Text(_isRebooting ? 'Connection pending...' : 'Connected to: ${DataService.baseUrl}'),
           ),
         ),
       ),
@@ -150,19 +276,27 @@ class UnusedCategoryListView extends StatelessWidget {
   }
 }
 
-class CategoryListView extends StatelessWidget {
+class CategoryListView extends StatefulWidget {
   final String category;
+  final bool isRebooting;
   final ItemUpdateCallback? onItemUpdate;
   
   const CategoryListView({
     super.key, 
     required this.category,
+    required this.isRebooting,
     this.onItemUpdate,
   });
 
+  @override
+  State<CategoryListView> createState() => _CategoryListViewState();
+}
+
+class _CategoryListViewState extends State<CategoryListView> {
+  // Reboot state is now managed by parent and passed via widget.isRebooting
+
   Widget _buildHeaderRow(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
       decoration: BoxDecoration(
         color: const Color.fromARGB(255, 128, 0, 0),
         border: Border(
@@ -170,7 +304,8 @@ class CategoryListView extends StatelessWidget {
         ),
       ),
 
-      child: Row(
+      padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 2),
+      child: Row( 
         children: [
           const SizedBox(width: 40, 
             child: Text('#', 
@@ -243,14 +378,14 @@ class CategoryListView extends StatelessWidget {
     }
 
     return InkWell(
-      onTap: onItemUpdate != null ? () async {
+      onTap: (widget.onItemUpdate != null && !widget.isRebooting) ? () async {
         await EditItemDialog.show(
           context: context,
-          category: category,
+          category: widget.category,
           initialName: primary,
           initialComment: secondary,
           initialStatus: status,
-          onUpdate: onItemUpdate!,
+          onUpdate: widget.onItemUpdate!,
         );
       } : null,
 
@@ -352,37 +487,80 @@ class CategoryListView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<String>>(
-      key: ValueKey(category), // reset when category changes
-      future: DataService.fetchItems(category),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
-        }
-        final items = snapshot.data ?? const <String>[];
-        if (items.isEmpty) {
-          return Center(child: Text('No $category found.'));
-        }
+    return Stack(
+      children: [
+        FutureBuilder<List<String>>(
+          key: ValueKey(widget.category), // reset when category changes
+          future: DataService.fetchItems(widget.category),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-        // Table-like layout with full rows and columns
-        return Column(
-          children: [
-            // Header row
-            _buildHeaderRow(context),
-            // Data rows
-            Expanded(
-              child: ListView.builder(
-                itemCount: items.length,
-                itemBuilder: (context, index) =>
-                    _buildItemRow(context, items[index], index),
+            if (snapshot.hasError) {
+                return const Center(child: CircularProgressIndicator(color: Colors.orange));
+            }
+            // if (snapshot.hasError){
+            //   return Center(child: Text('Error: ${snapshot.error}'));
+            // }
+
+            final items = snapshot.data ?? const <String>[];
+            if (widget.category == 'System') {
+              return DataService.buildSystemDialog(context: context);  
+            } else if (items.isEmpty) {
+              return Center(child: Text('No ${widget.category} found.'));
+            }
+
+            // Table-like layout with full rows and columns
+            return Column(
+              children: [
+                // Header row
+                _buildHeaderRow(context),
+                // Data rows
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: items.length,
+                    itemBuilder: (context, index) =>
+                        _buildItemRow(context, items[index], index),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+
+        // Overlay circular progress indicator when rebooting
+        if (widget.isRebooting)
+          Container(
+            color: Colors.grey[800], // .withOpacity(0.5),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(
+                    color: Colors.deepOrange,
+                    strokeWidth: 6,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'System is rebooting...',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: Colors.deepOrange,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Please wait while the system restarts',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.deepOrange[200],
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        );
-      },
+          ),
+      ],
     );
   }
 }
@@ -399,11 +577,20 @@ class DataService {
 
   static final String baseUrl = _env['PIHOLE_APP_HOSTURL'] ?? 'http://localhost';
   static final String appPassword = _env['PIHOLE_APP_PASSWORD'] ?? 'generated_app_password';
+  static final String sysAccount = _env['PIHOLE_SYS_ACCOUNT'] ?? 'manually set for PiHole admin user name';
+  static final String sysPassword = _env['PIHOLE_SYS_PASSWORD'] ?? 'manually set sys_password for PiHole admin user';
+
+  // System event service instance
+  static final SystemEventService systemEvents = SystemEventService();
 
   static final _service = PiHoleService(
     PiHoleClient(
-      baseUrl: '$baseUrl/api',
+      // baseUrl: '$baseUrl/api',
+      hostname: Uri.parse(baseUrl).host,
+      sysAdminAccount: sysAccount,
       appPassword: appPassword,
+      sysPassword: sysPassword,
+      systemEventService: systemEvents,
     ),
   );
 
@@ -413,5 +600,13 @@ class DataService {
 
   static Future<bool> updateItem(String category, String itemName,{Map<String, Object?>? props}) {
     return _service.updateCategoryItem(category, itemName, props: props);
+  }
+
+  static Widget buildSystemDialog({required BuildContext context}) {
+    return SystemDialog(
+      onFlushNetworkTable: _service.flushNetworkTable,
+      onRestartDNS: _service.restartDNS,
+      onRebootSystem: _service.rebootSystem,  
+   );
   }
 }
