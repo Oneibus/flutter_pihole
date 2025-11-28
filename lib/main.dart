@@ -1,10 +1,12 @@
 import 'dart:io' show Platform;
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'pihole/api_models.dart';
 import 'pihole/pihole_service.dart';
 import 'pihole/pihole_client.dart';
 import 'pihole/system_events.dart';
 import 'widgets/edit_item_dialog.dart';
+import 'widgets/edit_client_groups_dialog.dart';
 import 'widgets/system_dialog.dart';
 
 void main() {
@@ -50,6 +52,17 @@ class _MasterDetailPageState extends State<MasterDetailPage> {
   void initState() {
     super.initState();
     _setupEventListeners();
+    _initializeApp();
+  }
+
+  // Initialize application and load initial DNS blocking status
+  Future<void> _initializeApp() async {
+    try {
+      await DataService.initializeBlockingStatus();
+    } catch (e) {
+      // Silently handle initialization errors
+      debugPrint('Failed to initialize blocking status: $e');
+    }
   }
 
   // Setup listeners for system events and show SnackBars accordingly
@@ -163,8 +176,6 @@ class _MasterDetailPageState extends State<MasterDetailPage> {
               height: 56,
               width: 185,
             ),
-            // const SizedBox(width: 8),
-            // const Text("PiHole Control!"),
           ],
         ),
         titleSpacing: 0,
@@ -246,7 +257,7 @@ class UnusedCategoryListView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
 
-    final futureBuilder = FutureBuilder<List<String>>(key: ValueKey(category), // reset when category changes
+    final futureBuilder = FutureBuilder<List<dynamic>>(key: ValueKey(category), // reset when category changes
                                        future: DataService.fetchItems(category),
                                        builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
@@ -264,7 +275,8 @@ class UnusedCategoryListView extends StatelessWidget {
 
         return ListView.separated(itemCount: items.length, separatorBuilder: (_, __) => const Divider(height: 1), itemBuilder: (context, index) {
             final item = items[index];
-            return ListTile(title: Text(item, style: const TextStyle(fontSize: 10)), onTap: () {
+            return ListTile(title: Text(item, style: const TextStyle(fontSize: 10)), 
+              onTap: () {
               // Optional: handle item tap
               });
           },
@@ -275,6 +287,8 @@ class UnusedCategoryListView extends StatelessWidget {
     return futureBuilder;
   }
 }
+
+typedef ItemUpdateCallback = Future<void> Function(String category, String name, Map<String, Object?> props);
 
 class CategoryListView extends StatefulWidget {
   final String category;
@@ -307,10 +321,12 @@ class _CategoryListViewState extends State<CategoryListView> {
       padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 2),
       child: Row( 
         children: [
-          const SizedBox(width: 40, 
+          // item number
+          const SizedBox(width: 30, 
             child: Text('#', 
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500))),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500))),
 
+          // primary column
           const Expanded(
             flex: 3,
             child: Padding(
@@ -322,6 +338,7 @@ class _CategoryListViewState extends State<CategoryListView> {
             ),
           ),
 
+          // secondary column
           const Expanded(
             flex: 3,
             child: Padding(
@@ -333,6 +350,7 @@ class _CategoryListViewState extends State<CategoryListView> {
             ),
           ),
 
+          // status column
           const SizedBox(width: 60, 
             child: Padding(
               padding: EdgeInsets.only(left: 0),
@@ -347,45 +365,80 @@ class _CategoryListViewState extends State<CategoryListView> {
     );
   }
 
-  Widget _buildItemRow(BuildContext context, String item, int index) {
+  Widget _buildItemRow(BuildContext context, dynamic item, int index) {
     // Try to split a primary / secondary line by common separators.
-    String primary = item;
-    String? secondary;
-    String? status;
-    
-    if (item.contains(' — ')) {
-      final parts = item.split(' — ');
-      primary = parts.first;
-      secondary = parts.length > 1 ? parts[1] : null;
-      status = parts.length > 2 ? parts.sublist(2).join(' — ') : null;
-    } else if (item.contains(" - ")) {
-      final parts = item.split(' - ');
-      primary = parts.first;
-      secondary = parts.length > 1 ? parts[1] : null;
-      status = parts.length > 2 ? parts.sublist(2).join(' - ') : null;
-    } else if (item.contains('|')) {
-      final parts = item.split('|').map((s) => s.trim()).toList();
-      primary = parts.first;
-      secondary = parts.length > 1 ? parts[1] : null;
-      status = parts.length > 2 ? parts[2].trim() : null;
-    } else {
-      // try to extract trailing status in parentheses, e.g. "domain (blocked)"
-      final m = RegExp(r'^(.*?)(\s+\([^)]+\))$').firstMatch(item);
-      if (m != null) {
-        primary = m.group(1) ?? item;
-        status = (m.group(2) ?? '').trim();
-      }
-    }
+    int id = item['id'];
+    String? primary = item['primary'];
+    String? secondary = item['secondary'];
+    String? status = item['status'];
 
     return InkWell(
-      onTap: (widget.onItemUpdate != null && !widget.isRebooting) ? () async {
-        await EditItemDialog.show(
-          context: context,
-          category: widget.category,
-          initialName: primary,
-          initialComment: secondary,
-          initialStatus: status,
-          onUpdate: widget.onItemUpdate!,
+
+      onTap: (mounted && widget.onItemUpdate != null && !widget.isRebooting) ? () async {
+        if (widget.category.toLowerCase() == 'clients') {
+          // Parse client ID from primary (assuming it's the first part)
+          final groups = await DataService.getGroupsForClient(id);
+
+          await EditClientGroupsDialog.show(
+            context: context,
+            category: widget.category,
+            clientId: id,
+            clientName: primary ?? '',
+            availableGroups: groups,
+            onUpdate: (clientId, groupIds) async {
+              await DataService.updateClientGroups(clientId, groupIds);
+            },
+          );
+          return;
+        }
+
+        // Create controllers that will be managed by the dialog
+        final nameController = TextEditingController(text: primary ?? '');
+        final commentController = TextEditingController(text: secondary ?? '');
+        String currentStatus = status ?? 'disabled';
+
+        await DynamicItemEditDialog.show(
+          context, 
+          Icons.edit, 
+          widget.category, 
+          editItemDialogContent(
+            nameController,
+            commentController,
+            currentStatus,
+            (String value) => primary = value,
+            (String value) => secondary = value,
+            (String? value) => currentStatus = value ?? currentStatus
+          ), 
+          () async {
+            // Save callback
+            if (mounted && widget.onItemUpdate != null) {
+              await widget.onItemUpdate!(
+                widget.category, 
+                primary ?? '', 
+                {
+                  // RFJ: refactor to use property names per category
+                  'name': nameController.text,
+                  'comment': commentController.text.isEmpty ? null : commentController.text,
+                  'enabled': currentStatus == 'enabled',
+                },
+              );
+              if (mounted) {
+                Navigator.of(context).pop();
+              }
+            }
+            // Dispose controllers after save
+            nameController.dispose();
+            commentController.dispose();
+          },  
+          () {
+            // Cancel callback
+            if (mounted) {
+              Navigator.of(context).pop();
+            }
+            // Dispose controllers after cancel
+            nameController.dispose();
+            commentController.dispose();
+          }
         );
       } : null,
 
@@ -402,7 +455,7 @@ class _CategoryListViewState extends State<CategoryListView> {
           children: [
             // Index/Number column
             SizedBox(
-              width: 40,
+              width: 30,
               child: Padding(
                 padding: const EdgeInsets.only(left: 0),
                 child: Text(
@@ -422,7 +475,7 @@ class _CategoryListViewState extends State<CategoryListView> {
               child: Padding(
                 padding: const EdgeInsets.only(left: 0),
                 child: Text(
-                  primary,
+                  primary ?? '',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     fontSize: 12,
                     fontWeight: FontWeight.w400,
@@ -439,7 +492,7 @@ class _CategoryListViewState extends State<CategoryListView> {
               child: Padding(
                 padding: const EdgeInsets.only(left: 0),
                 child: Text(
-                  secondary,
+                  secondary ?? '',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     fontSize: 12,
                     fontWeight: FontWeight.w400,
@@ -453,21 +506,21 @@ class _CategoryListViewState extends State<CategoryListView> {
             // Status column
             if (status != null)
               SizedBox(
-                width: 80,
+                width: 60,
                 child: Padding(
                   padding: const EdgeInsets.only(left: 0),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: status.contains('disabled') 
+                      color: status!.contains('disabled') 
                           ? Colors.red[110] 
                           : Colors.green[110],
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      status,
+                      status!,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: status.contains('disabled') 
+                        color: status!.contains('disabled')
                             ? Colors.red[800] 
                             : Colors.green[800],
                         fontSize: 10,
@@ -489,7 +542,7 @@ class _CategoryListViewState extends State<CategoryListView> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        FutureBuilder<List<String>>(
+        FutureBuilder<List<dynamic>>(
           key: ValueKey(widget.category), // reset when category changes
           future: DataService.fetchItems(widget.category),
           builder: (context, snapshot) {
@@ -594,7 +647,7 @@ class DataService {
     ),
   );
 
-  static Future<List<String>> fetchItems(String category) {
+  static Future<List<dynamic>> fetchItems(String category) {
     return _service.listForCategory(category);
   }
 
@@ -606,7 +659,29 @@ class DataService {
     return SystemDialog(
       onFlushNetworkTable: _service.flushNetworkTable,
       onRestartDNS: _service.restartDNS,
-      onRebootSystem: _service.rebootSystem,  
+      onRebootSystem: _service.rebootSystem,
+      onEnableBlocking: ({int? duration}) => _service.enableBlocking(),
+      onDisableBlocking: ({int? duration}) => _service.disableBlocking(duration: duration),
+      onGetBlockingStatus: _service.isBlockingEnabled,
    );
+  }
+
+  static Future<List<GroupInfo>> getGroupsForClient(int clientId) {
+    return _service.getGroupsForClient(clientId);
+  }
+  
+  static Future<bool> updateClientGroups(int clientId, List<int> groupIds) {
+    return _service.updateClientGroups(clientId, groupIds);
+  }
+
+  // Initialize and cache the DNS blocking status on app startup
+  static Future<void> initializeBlockingStatus() async {
+    try {
+      // Query the blocking status to initialize/cache it
+      await _service.isBlockingEnabled();
+    } catch (e) {
+      debugPrint('Error initializing blocking status: $e');
+      rethrow;
+    }
   }
 }

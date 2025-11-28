@@ -1,19 +1,28 @@
 import 'package:flutter/material.dart';
+import 'enable_disable_blocking_dialog.dart';
 
 /// A callback function type for system operations
 typedef SystemOperationCallback = Future<bool> Function();
+typedef EnableDisableCallback = Future<bool> Function({int? duration});
+typedef GetBlockingStatusCallback = Future<bool> Function();
 
 /// A dialog for system operations like restart DNS, flush network table, and reboot
 class SystemDialog extends StatefulWidget {
   final SystemOperationCallback onRestartDNS;
   final SystemOperationCallback onFlushNetworkTable;
   final SystemOperationCallback onRebootSystem;
+  final EnableDisableCallback onEnableBlocking;
+  final EnableDisableCallback onDisableBlocking;
+  final GetBlockingStatusCallback onGetBlockingStatus;
 
   const SystemDialog({
     super.key,
     required this.onRestartDNS,
     required this.onFlushNetworkTable,
     required this.onRebootSystem,
+    required this.onEnableBlocking,
+    required this.onDisableBlocking,
+    required this.onGetBlockingStatus,
   });
 
   /// Static method to show the dialog
@@ -22,6 +31,9 @@ class SystemDialog extends StatefulWidget {
     required SystemOperationCallback onRestartDNS,
     required SystemOperationCallback onFlushNetworkTable,
     required SystemOperationCallback onRebootSystem,
+    required EnableDisableCallback onEnableBlocking,
+    required EnableDisableCallback onDisableBlocking,
+    required GetBlockingStatusCallback onGetBlockingStatus,
   }) {
     return showDialog<void>(
       context: context,
@@ -29,6 +41,9 @@ class SystemDialog extends StatefulWidget {
         onRestartDNS: onRestartDNS,
         onFlushNetworkTable: onFlushNetworkTable,
         onRebootSystem: onRebootSystem,
+        onEnableBlocking: onEnableBlocking,
+        onDisableBlocking: onDisableBlocking,
+        onGetBlockingStatus: onGetBlockingStatus,
       ),
     );
   }
@@ -39,6 +54,46 @@ class SystemDialog extends StatefulWidget {
 
 class _SystemDialogState extends State<SystemDialog> {
   bool _isProcessing = false;
+  bool _blockingEnabled = true; // Default to enabled
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBlockingStatus();
+  }
+
+  Future<void> _loadBlockingStatus() async {
+    try {
+      final status = await widget.onGetBlockingStatus();
+      if (mounted) {
+        setState(() {
+          _blockingEnabled = status;
+        });
+      }
+    } catch (e) {
+      // Ignore errors during initial load
+    }
+  }
+
+  Future<void> _handleToggleBlocking() async {
+    // Show the enable/disable dialog
+    await EnableDisableBlockingDialog.show(
+      context: context,
+      isCurrentlyEnabled: _blockingEnabled,
+      onSave: (durationSeconds) async {
+        if (_blockingEnabled) {
+          // Currently enabled, so disable it
+          return await widget.onDisableBlocking(duration: durationSeconds);
+        } else {
+          // Currently disabled, so enable it
+          return await widget.onEnableBlocking();
+        }
+      },
+    );
+
+    // Refresh the blocking status after the dialog closes
+    await _loadBlockingStatus();
+  }
 
   Future<void> _handleRestartDNS() async {
     setState(() => _isProcessing = true);
@@ -162,6 +217,19 @@ class _SystemDialogState extends State<SystemDialog> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Toggle Enable/Disable Blocking Button
+              ElevatedButton.icon(
+                onPressed: _isProcessing ? null : _handleToggleBlocking,
+                icon: Icon(_blockingEnabled ? Icons.block : Icons.check_circle),
+                label: Text(_blockingEnabled ? 'Disable Blocking' : 'Enable Blocking'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _blockingEnabled ? Colors.orange[700] : Colors.green[700],
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+              const SizedBox(height: 12),
+              
               // Restart DNS Button
               ElevatedButton.icon(
                 onPressed: _isProcessing ? null : _handleRestartDNS,
