@@ -620,19 +620,24 @@ class _CategoryListViewState extends State<CategoryListView> {
 }
 
 class DataService {
-  // Read from Windows environment variables (fallbacks included)
-  static final Map<String, String> _env = (() {
-    try {
-      return Platform.environment;
-    } catch (_) {
-      return const <String, String>{};
-    }
-  })();
+  // // Read from Windows environment variables (fallbacks included)
+  // static final Map<String, String> _env = (() {
+  //   try {
+  //     return Platform.environment;
+  //   } catch (_) {
+  //     return const <String, String>{};
+  //   }
+  // })();
 
-  static final String baseUrl = _env['PIHOLE_APP_HOSTURL'] ?? 'http://localhost';
-  static final String appPassword = _env['PIHOLE_APP_PASSWORD'] ?? 'generated_app_password';
-  static final String sysAccount = _env['PIHOLE_SYS_ACCOUNT'] ?? 'manually set for PiHole admin user name';
-  static final String sysPassword = _env['PIHOLE_SYS_PASSWORD'] ?? 'manually set sys_password for PiHole admin user';
+  // static final String baseUrl = _env['PIHOLE_APP_HOSTURL'] ?? 'http://localhost';
+  // static final String appPassword = _env['PIHOLE_APP_PASSWORD'] ?? 'generated_app_password';
+  // static final String sysAccount = _env['PIHOLE_SYS_ACCOUNT'] ?? 'manually set for PiHole admin user name';
+  // static final String sysPassword = _env['PIHOLE_SYS_PASSWORD'] ?? 'manually set sys_password for PiHole admin user';
+
+  static final String baseUrl = String.fromEnvironment('PIHOLE_APP_HOSTURL', defaultValue: Platform.environment['PIHOLE_APP_HOSTURL'] ?? 'http://localhost');
+  static final String appPassword = String.fromEnvironment('PIHOLE_APP_PASSWORD', defaultValue: Platform.environment['PIHOLE_APP_PASSWORD'] ?? 'generated_app_password');
+  static final String sysAccount = String.fromEnvironment('PIHOLE_SYS_ACCOUNT', defaultValue: Platform.environment['PIHOLE_SYS_ACCOUNT'] ?? 'manually set for PiHole admin user name');
+  static final String sysPassword = String.fromEnvironment('PIHOLE_SYS_PASSWORD', defaultValue: Platform.environment['PIHOLE_SYS_PASSWORD'] ?? 'manually set sys_password for PiHole admin user');
 
   // System event service instance
   static final SystemEventService systemEvents = SystemEventService();
