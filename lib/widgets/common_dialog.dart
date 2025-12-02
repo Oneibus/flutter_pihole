@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 /// A reusable base dialog widget with common styling and structure
 /// Uses composition to allow custom content insertion
-class CommonDialog extends StatelessWidget {
+class BuildableCommonDialog extends StatelessWidget {
   final String title;
   final Widget? subtitle;
   final double maxHeight;
@@ -13,8 +13,9 @@ class CommonDialog extends StatelessWidget {
   final Color? titleBackgroundColor;
   final Color? backgroundColor;
   final IconData? titleIcon;
+  final bool spaceContent;
 
-  const CommonDialog({
+  const BuildableCommonDialog({
     super.key,
     required this.title,
     this.subtitle,
@@ -25,9 +26,11 @@ class CommonDialog extends StatelessWidget {
     this.isLoading = false,
     this.titleBackgroundColor,
     this.backgroundColor,
-    this.titleIcon,
+    this.titleIcon, 
+    this.spaceContent = false,
   });
 
+  @override
   Widget build(BuildContext context) {
     final effectiveTitleBgColor = titleBackgroundColor ?? Colors.green[700];
     final effectiveBgColor = backgroundColor ?? Colors.grey[50];
@@ -55,12 +58,14 @@ class CommonDialog extends StatelessWidget {
                   topRight: Radius.circular(8.0),
                 ),
               ),
+
               child: Row(
                 children: [
                   if (titleIcon != null) ...[
                     Icon(titleIcon, color: Colors.white),
                     const SizedBox(width: 10),
                   ],
+
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,6 +78,7 @@ class CommonDialog extends StatelessWidget {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
+
                         if (subtitle != null) ...[
                           const SizedBox(height: 4),
                           DefaultTextStyle(
@@ -93,8 +99,9 @@ class CommonDialog extends StatelessWidget {
             // Content area
             content,
 
-            // Spacer to push actions to bottom
-            const Spacer(),
+            // // Spacer to push actions to bottom
+            if (spaceContent) 
+               const Spacer(),
 
             // Actions area (if provided)
             if (actions != null && actions!.isNotEmpty)
@@ -137,6 +144,7 @@ class DialogBuilder {
   Color? titleBackgroundColor;
   Color? backgroundColor;
   IconData? titleIcon;
+  bool isSpaceable = false;
 
   DialogBuilder setTitle(String title) {
     this.title = title;
@@ -208,8 +216,13 @@ class DialogBuilder {
     return this;
   }
 
+  DialogBuilder setSpacable(bool isSpaceable) {
+    this.isSpaceable = isSpaceable;
+    return this;
+  }
+
   Widget build() {
-    return CommonDialog(
+    return BuildableCommonDialog(
       title: title ?? 'Dialog',
       subtitle: subtitle,
       content: content ?? const SizedBox.shrink(),
@@ -220,6 +233,7 @@ class DialogBuilder {
       titleBackgroundColor: titleBackgroundColor,
       backgroundColor: backgroundColor,
       titleIcon: titleIcon,
+      spaceContent: isSpaceable,
     );
   }
 

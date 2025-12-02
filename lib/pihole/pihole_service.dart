@@ -24,7 +24,7 @@ class PiHoleService {
         props?['status'] = props?['enabled'] == true ? 'enabled' : 'disabled';
 
         // props?['enabled'] = props?['enabled'] == true ? false : true;
-        String path = catName + '/${props?['type']}/${props?['kind']}';
+        String path = '$catName/${props?['type']}/${props?['kind']}';
         final res = await _client.putCategoryItem(category: path, listitem: listitem, props: props ?? {});
         bool saved = res.status == 'success';
         return saved;
@@ -50,7 +50,7 @@ class PiHoleService {
       case 'clients':
         final res = await _client.getClients();
         return (res.clients?.map((c) => {
-              'primary': c.hostname ?? c.hwaddr ?? '',
+              'primary': c.hostname!.isNotEmpty ? c.hostname : c.hwaddr ?? '',
               'secondary': c.comment ?? '',
               'status': c.groupIds?.map((id) => id.toString()).toList().join(', ') ?? '',
               'id': c.id,
@@ -77,13 +77,20 @@ class PiHoleService {
       case 'network':
         final res = await _client.getNetworkDevices();
         return (res.devices?.map((n) => {
-              'primary': n.ips?[0].name ?? '',
-              'secondary': n.ips?[0].ip ?? '',
+               if (n.ips!.isEmpty) ...{
+                 'primary': n.macVendor ?? n.hwAddr ?? 'unknown',
+                 'secondary': n.hwAddr ?? n.interface ?? 'unknown',
+                 'ip': '(stale)',
+                 'name': '${n.macVendor ?? n.hwAddr ?? 'unknown'})',
+               } else ...{
+                'primary': n.ips![0].name ?? '',
+                'secondary': n.ips![0].ip ?? '',
+                'ip': n.ips![0].ip ?? '',
+                'name': n.ips![0].name,
+               },
               'status': n.numQueries.toString(),
               'id': n.id,
-              'ip': n.ips?[0].ip ?? '',
               'hwaddr': n.hwAddr ?? '',
-              'name': n.ips?[0].name,
               'interface': n.interface,
               'queries': n.numQueries,
             }).toList()) ?? [];

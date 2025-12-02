@@ -72,8 +72,8 @@ class EditClientGroupsDialog {
               .setTitle('Manage Group Assignments')
               .setSubtitle(Text('Client: $clientName'))
               .setTitleIcon(Icons.group)
-              .setWidth(320)
-              .setMaxHeight(480)
+              .setWidth(330)
+              .setMaxHeight(360)
               .setContent(
                 editClientGroupsDialogContent(
                   groups: groups,
@@ -119,46 +119,47 @@ Widget editClientGroupsDialogContent({
   required Function(int index) onToggleGroup,
   bool isLoading = false,
 }) {
-  return Column(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      // Groups list
-      Flexible(
+  return Expanded(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Groups list
+        Expanded(
         child: groups.isEmpty
             ? const Padding(
-                padding: EdgeInsets.all(4.0),
+                padding: EdgeInsets.all(1.0),
                 child: Center(
                   child: Text(
                     'No groups available',
                     style: TextStyle(
                       color: Colors.grey,
-                      fontSize: 14,
+                      fontSize: 12,
                     ),
                   ),
                 ),
               )
             : ListView.separated(
-                shrinkWrap: true,
-                padding: const EdgeInsets.symmetric(vertical: 2.0),
+                padding: const EdgeInsets.symmetric(vertical: 1.0),
                 itemCount: groups.length,
                 separatorBuilder: (context, index) => const Divider(height: 1),
                 itemBuilder: (context, index) {
                   final group = groups[index];
-                  return CheckboxListTile(
+                  return CheckboxListTile.adaptive(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 0.0),
+                    // visualDensity: const VisualDensity(horizontal: 0, vertical: -2),
+                    visualDensity: VisualDensity.compact,
+                    checkboxShape: CircleBorder(side: BorderSide(color: Colors.green[700]!, width: 1)),
                     title: Text(
                       group.name,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500,
                       ),
                     ),
-                    subtitle: Text(
-                      'ID: ${group.id}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey[600],
-                      ),
-                    ),
+                    // subtitle: Text(
+                    //   'ID: ${group.id}',
+                    //   style: TextStyle(fontSize: 12, color: Colors.grey[600],
+                    //   ),
+                    // ),
                     value: group.isAssigned,
                     activeColor: Colors.green[700],
                     onChanged: isLoading ? null : (bool? value) {
@@ -174,7 +175,7 @@ Widget editClientGroupsDialogContent({
 
       // Summary section
       Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+        padding: const EdgeInsets.symmetric(horizontal: 2.0, vertical: 2.0),
         decoration: BoxDecoration(
           color: Colors.green[50],
           border: Border(
@@ -183,12 +184,12 @@ Widget editClientGroupsDialogContent({
         ),
         child: Row(
           children: [
-            Icon(Icons.info_outline, size: 8, color: Colors.green[700]),
-            const SizedBox(width: 8),
+            Icon(Icons.info_outline, size: 4, color: Colors.green[700]),
+            const SizedBox(width: 4),
             Text(
               '${groups.where((g) => g.isAssigned).length} of ${groups.length} groups selected',
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 10,
                 color: Colors.green[900],
                 fontWeight: FontWeight.w500,
               ),
@@ -197,5 +198,6 @@ Widget editClientGroupsDialogContent({
         ),
       ),
     ],
+    ),
   );
 }

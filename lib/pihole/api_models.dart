@@ -197,7 +197,7 @@ class NetworkResponse {
 
   factory NetworkResponse.fromJson(Map<String, dynamic> json) =>
       NetworkResponse(
-        networks: _asList<Network>(json['networks'], Network.fromJson),
+        networks: _asList<Network>(json['devices'], Network.fromJson),
       );
 }
 

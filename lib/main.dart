@@ -546,12 +546,13 @@ class _CategoryListViewState extends State<CategoryListView> {
           key: ValueKey(widget.category), // reset when category changes
           future: DataService.fetchItems(widget.category),
           builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
+            while (snapshot.connectionState != ConnectionState.done) {
               return const Center(child: CircularProgressIndicator());
             }
 
-            if (snapshot.hasError) {
-                return const Center(child: CircularProgressIndicator(color: Colors.orange));
+            if (snapshot.connectionState == ConnectionState.done && snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+                // return const Center(child: CircularProgressIndicator(color: Colors.orange));
             }
             // if (snapshot.hasError){
             //   return Center(child: Text('Error: ${snapshot.error}'));
