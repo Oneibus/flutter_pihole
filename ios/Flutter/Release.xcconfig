@@ -1,1 +1,5 @@
 #include "Generated.xcconfig"
+PIHOLE_APP_HOSTURL = http:\/\/pidns.lan
+PIHOLE_APP_PASSWORD = mbYsnRiVsx4/4dVS1C5euH1cnanqiK9GX6I4KRJqMnY=
+PIHOLE_SYS_ACCOUNT = admin
+PIHOLE_SYS_PASSWORD = mbYsnRiVsx4/4dVS1C5euH1cnanqiK9GX6I4KRJqMnY=
