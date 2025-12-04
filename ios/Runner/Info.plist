@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Flutter Pihole Client</string>
+	<string>Pi-hole Control</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -50,13 +50,5 @@
         <key>NSAllowsArbitraryLoads</key>
         <true/>
     </dict>
-    <key>PIHOLE_APP_HOSTURL</key>
-    <string>$(PIHOLE_APP_HOSTURL)</string>
-    <key>PIHOLE_APP_PASSWORD</key>
-    <string>$(PIHOLE_APP_PASSWORD)</string>
-    <key>PIHOLE_SYS_ACCOUNT</key>
-    <string>$(PIHOLE_SYS_ACCOUNT)</string>
-    <key>PIHOLE_SYS_PASSWORD</key>
-    <string>$(PIHOLE_SYS_PASSWORD)</string>
 </dict>
 </plist>

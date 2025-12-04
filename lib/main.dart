@@ -1,13 +1,11 @@
-import 'dart:io' show Platform;
+// import 'dart:io' show Platform;
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'pihole/api_models.dart';
-import 'pihole/pihole_service.dart';
-import 'pihole/pihole_client.dart';
-import 'pihole/system_events.dart';
+
+import 'services/system_events.dart';
+import 'services/data_services.dart';
 import 'widgets/edit_item_dialog.dart';
 import 'widgets/edit_client_groups_dialog.dart';
-import 'widgets/system_dialog.dart';
 
 void main() {
   runApp(const MyApp());
@@ -31,7 +29,8 @@ class MasterDetailPage extends StatefulWidget {
   State<MasterDetailPage> createState() => _MasterDetailPageState();
 }
 
-class _MasterDetailPageState extends State<MasterDetailPage> {
+class _MasterDetailPageState extends State<MasterDetailPage> with WidgetsBindingObserver {
+
   static const categories = <String>[
     'Groups',
     'Clients',
@@ -44,6 +43,7 @@ class _MasterDetailPageState extends State<MasterDetailPage> {
   static String _selected = categories.first;
   int _refreshKey = 0; // Key to force refresh
   bool _isRebooting = false; // Track reboot state
+  String? _piholeHost = '';
 
   StreamSubscription<RebootEvent>? _rebootSubscription;
   StreamSubscription<ServiceReadinessEvent>? _serviceSubscription;
@@ -51,24 +51,131 @@ class _MasterDetailPageState extends State<MasterDetailPage> {
   @override
   void initState() {
     super.initState();
-    _setupEventListeners();
+    WidgetsBinding.instance.addObserver(this);
     _initializeApp();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    DataService.systemEvents.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.detached) {
+      // The engine is shutting down (User swiped away the app or OS killed it)
+      // Note: Network calls here are "best effort" and may not always complete
+      // on mobile OSs due to strict background limits, but it helps.
+      DataService.logout();
+    }
   }
 
   // Initialize application and load initial DNS blocking status
   Future<void> _initializeApp() async {
     try {
-      await DataService.initializeBlockingStatus();
+      await _setupEventListeners();
     } catch (e) {
       // Silently handle initialization errors
       debugPrint('Failed to initialize blocking status: $e');
     }
   }
 
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Row(
+          children: [
+            Image.asset(
+              'assets/images/PiHoleControl.png',
+              height: 56,
+              width: 185,
+            ),
+          ],
+        ),
+        titleSpacing: 0,
+        backgroundColor: const Color(0xFF222222),
+      ),
+
+      body: Row(
+        children: [
+          // Left panel
+          Container(
+            width: 100,
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            child: ListView.separated(
+              itemCount: categories.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (ctx, i) {
+                final name = categories[i];
+                final selected = _selected == name;
+                // Use InkWell + Container instead of ListTile for narrow columns
+                return InkWell(
+                  onTap: _isRebooting ? null : () {
+                    setState(() {
+                      _selected = name;
+                    });
+                  },
+                  child: Container(
+                    height: 48, // Fixed comfortable height
+                    alignment: Alignment.centerLeft, // Ensure text starts at left
+                    padding: const EdgeInsets.symmetric(horizontal: 12.0), // Manual padding
+                    color: selected ? Colors.green[200] : null, // Selection background
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: selected ? 14 : 12,
+                        // Use onSurface so it adapts to Dark/Light mode automatically
+                        color: selected
+                            ? Colors.green[900]
+                            : Theme.of(context).colorScheme.onSurface,
+                        fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const VerticalDivider(width: 2),
+          // Right panel
+          Expanded(
+            child: CategoryListView(
+              key: ValueKey('$_selected-$_refreshKey'), // Force rebuild when key changes
+              category: _selected,
+              isRebooting: _isRebooting,
+              onItemUpdate: (category, initialName, props) async {
+                await DataService.updateItem(category, initialName, props: props);
+                // Trigger refresh after update
+                setState(() {
+                  _refreshKey++;
+                });
+              },
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: BottomAppBar(
+        height: 48,
+        child: Padding(
+          padding: const EdgeInsets.all(2.0),
+          child: NavigationToolbar(
+            middle: Text(_isRebooting ? 'Connection pending...' : 'Connected to: $_piholeHost'),
+          ),
+        ),
+      ),
+    );
+  }
+
   // Setup listeners for system events and show SnackBars accordingly
-  //
-  void _setupEventListeners() {
+  Future<void> _setupEventListeners() async {
+    await DataService.initializeBlockingStatus();
     // Listen to reboot events
+
     _rebootSubscription = DataService.systemEvents.rebootStream.listen((event) {
       if (!mounted) return;
 
@@ -117,8 +224,8 @@ class _MasterDetailPageState extends State<MasterDetailPage> {
         SnackBar(
           content: Text(message),
           backgroundColor: backgroundColor,
-          duration: event.state == RebootState.pending 
-              ? const Duration(seconds: 5) 
+          duration: event.state == RebootState.pending
+              ? const Duration(seconds: 5)
               : const Duration(seconds: 3),
         ),
       );
@@ -139,6 +246,10 @@ class _MasterDetailPageState extends State<MasterDetailPage> {
         case ServiceState.ready:
           message = event.message ?? 'Service is ready';
           backgroundColor = Colors.green;
+          setState(() {
+            _piholeHost = event.host;
+            _refreshKey++;
+          });
           break;
         case ServiceState.unavailable:
           message = event.message ?? 'Service unavailable';
@@ -158,96 +269,7 @@ class _MasterDetailPageState extends State<MasterDetailPage> {
     });
   }
 
-  @override
-  void dispose() {
-    _rebootSubscription?.cancel();
-    _serviceSubscription?.cancel();
-    super.dispose();
-  }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            Image.asset(
-              'assets/images/PiHoleControl.png',
-              height: 56,
-              width: 185,
-            ),
-          ],
-        ),
-        titleSpacing: 0,
-        backgroundColor: const Color(0xFF222222),
-      ),
-
-      body: Row(
-        children: [
-          // Left panel
-          Container(
-            width: 160,
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            child: ListView.separated(
-              itemCount: categories.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (ctx, i) {
-                final name = categories[i];
-                final selected = _selected == name;
-
-                return SizedBox(
-                  height: 40, // Fixed height of 40 pixels
-                  child: ListTile(
-                    title: Text(
-                      name, 
-                      style: TextStyle(
-                        fontSize: selected ? 14 : 12,
-                        color: selected ? Colors.green[900] : Colors.black,
-                        fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                      ),
-                    ),
-                    selected: selected,
-                    selectedTileColor: Colors.green[200],
-                    enabled: !_isRebooting, // Disable during reboot
-                    onTap: _isRebooting ? null : () {
-                      setState(() {
-                        _selected = name;
-                      });
-                    },
-                  ),
-                );
-              },
-            ),
-          ),
-          const VerticalDivider(width: 2),
-          // Right panel
-          Expanded(
-            child: CategoryListView(
-              key: ValueKey('$_selected-$_refreshKey'), // Force rebuild when key changes
-              category: _selected,
-              isRebooting: _isRebooting,
-              onItemUpdate: (category, initialName, props) async {
-                await DataService.updateItem(category, initialName, props: props);
-                // Trigger refresh after update
-                setState(() {
-                  _refreshKey++;
-                });
-              },
-            ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: BottomAppBar(
-        height: 48,
-        child: Padding(
-          padding: const EdgeInsets.all(2.0),
-          child: NavigationToolbar(
-            middle: Text(_isRebooting ? 'Connection pending...' : 'Connected to: ${DataService.baseUrl}'),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class UnusedCategoryListView extends StatelessWidget {
@@ -512,15 +534,15 @@ class _CategoryListViewState extends State<CategoryListView> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: status!.contains('disabled') 
+                      color: status.contains('disabled')
                           ? Colors.red[110] 
                           : Colors.green[110],
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      status!,
+                      status,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: status!.contains('disabled')
+                        color: status.contains('disabled')
                             ? Colors.red[800] 
                             : Colors.green[800],
                         fontSize: 10,
@@ -616,78 +638,5 @@ class _CategoryListViewState extends State<CategoryListView> {
           ),
       ],
     );
-  }
-}
-
-class DataService {
-  // // Read from Windows environment variables (fallbacks included)
-  // static final Map<String, String> _env = (() {
-  //   try {
-  //     return Platform.environment;
-  //   } catch (_) {
-  //     return const <String, String>{};
-  //   }
-  // })();
-
-  // static final String baseUrl = _env['PIHOLE_APP_HOSTURL'] ?? 'http://localhost';
-  // static final String appPassword = _env['PIHOLE_APP_PASSWORD'] ?? 'generated_app_password';
-  // static final String sysAccount = _env['PIHOLE_SYS_ACCOUNT'] ?? 'manually set for PiHole admin user name';
-  // static final String sysPassword = _env['PIHOLE_SYS_PASSWORD'] ?? 'manually set sys_password for PiHole admin user';
-
-  static final String baseUrl = String.fromEnvironment('PIHOLE_APP_HOSTURL', defaultValue: Platform.environment['PIHOLE_APP_HOSTURL'] ?? 'http://localhost');
-  static final String appPassword = String.fromEnvironment('PIHOLE_APP_PASSWORD', defaultValue: Platform.environment['PIHOLE_APP_PASSWORD'] ?? 'generated_app_password');
-  static final String sysAccount = String.fromEnvironment('PIHOLE_SYS_ACCOUNT', defaultValue: Platform.environment['PIHOLE_SYS_ACCOUNT'] ?? 'manually set for PiHole admin user name');
-  static final String sysPassword = String.fromEnvironment('PIHOLE_SYS_PASSWORD', defaultValue: Platform.environment['PIHOLE_SYS_PASSWORD'] ?? 'manually set sys_password for PiHole admin user');
-
-  // System event service instance
-  static final SystemEventService systemEvents = SystemEventService();
-
-  static final _service = PiHoleService(
-    PiHoleClient(
-      // baseUrl: '$baseUrl/api',
-      hostname: Uri.parse(baseUrl).host,
-      sysAdminAccount: sysAccount,
-      appPassword: appPassword,
-      sysPassword: sysPassword,
-      systemEventService: systemEvents,
-    ),
-  );
-
-  static Future<List<dynamic>> fetchItems(String category) {
-    return _service.listForCategory(category);
-  }
-
-  static Future<bool> updateItem(String category, String itemName,{Map<String, Object?>? props}) {
-    return _service.updateCategoryItem(category, itemName, props: props);
-  }
-
-  static Widget buildSystemDialog({required BuildContext context}) {
-    return SystemDialog(
-      onFlushNetworkTable: _service.flushNetworkTable,
-      onRestartDNS: _service.restartDNS,
-      onRebootSystem: _service.rebootSystem,
-      onEnableBlocking: ({int? duration}) => _service.enableBlocking(),
-      onDisableBlocking: ({int? duration}) => _service.disableBlocking(duration: duration),
-      onGetBlockingStatus: _service.isBlockingEnabled,
-   );
-  }
-
-  static Future<List<GroupInfo>> getGroupsForClient(int clientId) {
-    return _service.getGroupsForClient(clientId);
-  }
-  
-  static Future<bool> updateClientGroups(int clientId, List<int> groupIds) {
-    return _service.updateClientGroups(clientId, groupIds);
-  }
-
-  // Initialize and cache the DNS blocking status on app startup
-  static Future<void> initializeBlockingStatus() async {
-    try {
-      // Query the blocking status to initialize/cache it
-      await _service.isBlockingEnabled();
-    } catch (e) {
-      debugPrint('Error initializing blocking status: $e');
-      rethrow;
-    }
   }
 }

@@ -20,8 +20,8 @@ class PiHoleService {
         // hack: handle enable/disable via 'allow' prop
         props?['type'] = 'deny';
         props?['kind'] = 'exact';
-        props?['domain'] = props?['name'];
-        props?['status'] = props?['enabled'] == true ? 'enabled' : 'disabled';
+        props?['domain'] = props['name'];
+        props?['status'] = props['enabled'] == true ? 'enabled' : 'disabled';
 
         // props?['enabled'] = props?['enabled'] == true ? false : true;
         String path = '$catName/${props?['type']}/${props?['kind']}';
@@ -128,7 +128,7 @@ class PiHoleService {
 
   Future<bool> restartDNS() async => _client.restartDNS();
 
-  Future<bool> flushNetworkTable() async => _client.flushNetworkTable();
+  Future<bool> flushNetworkCache() async => _client.flushNetworkCache();
 
   Future<bool> rebootSystem() async => _client.rebootSystem();
 
@@ -141,5 +141,18 @@ class PiHoleService {
   Future<bool> isBlockingEnabled() async {
     final status = await _client.getBlockingStatus();
     return status['blocking'] == 'enabled';
+  }
+
+  Future<bool> isConfigured() async {
+    final bool? status = await _client.getConfigurationStatus();
+    return status!;
+  }
+
+  Future<void> resetService() async {
+    _client.resetService();
+  }
+
+  Future<void> logout() async {
+    _client.resetService();
   }
 }

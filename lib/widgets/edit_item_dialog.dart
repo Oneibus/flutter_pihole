@@ -67,42 +67,47 @@ Widget editItemDialogContent(
             children: [
               // First row: Name and Comment inputs
               Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
+                /// mainAxisSize: MainAxisSize.min,
+                  children: [
                   // Name Input
-                  Container(alignment: Alignment.centerLeft,
-                    width: 220, height: 32,
-                    padding: const EdgeInsets.all(4),
-                    decoration: _boxDecoration,
+                  Expanded(
+                    flex: 3,
+                    child: Container(alignment: Alignment.centerLeft,
+                      width: 220, height: 32,
+                      padding: const EdgeInsets.all(4),
+                      decoration: _boxDecoration,
 
-                    child: EditableText(
-                      controller: primaryController,
-                      focusNode: FocusNode(),
-                      style: _textStyle,
-                      cursorColor: _cursorColor,
-                      backgroundCursorColor: _bkgndCursorColor,
-                      onChanged: (value) {
-                          onPrimaryChanged(value);
-                      },
+                      child: EditableText(
+                        controller: primaryController,
+                        focusNode: FocusNode(),
+                        style: _textStyle,
+                        cursorColor: _cursorColor,
+                        backgroundCursorColor: _bkgndCursorColor,
+                        onChanged: (value) {
+                            onPrimaryChanged(value);
+                        },
+                      ),
                     ),
                   ),
-
                   const SizedBox(width: 8),
                   // Comment Input
-                  Container(alignment: Alignment.centerLeft,
-                    width: 140, height: 32,
-                    padding: const EdgeInsets.all(4),
-                    decoration: _boxDecoration,
+                  Expanded(
+                    flex: 3,
+                    child: Container(alignment: Alignment.centerLeft,
+                      width: 140, height: 32,
+                      padding: const EdgeInsets.all(4),
+                      decoration: _boxDecoration,
 
-                    child: EditableText(
-                      controller: secondaryController,
-                      focusNode: FocusNode(),
-                      style: _textStyle,
-                      cursorColor: _cursorColor,
-                      backgroundCursorColor: _bkgndCursorColor,
-                      onChanged: (value) {
-                        onSecondaryChanged(value);
-                      },
+                      child: EditableText(
+                        controller: secondaryController,
+                        focusNode: FocusNode(),
+                        style: _textStyle,
+                        cursorColor: _cursorColor,
+                        backgroundCursorColor: _bkgndCursorColor,
+                        onChanged: (value) {
+                          onSecondaryChanged(value);
+                        },
+                      ),
                     ),
                   ),
                 ],

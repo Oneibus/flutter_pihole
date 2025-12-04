@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:dartssh2/dartssh2.dart' as ssh;
 import 'api_models.dart';
-import 'system_events.dart';
+import '../services/system_events.dart';
+import '../services/settings_service.dart';
 
 class PiHoleHttpException implements Exception {
   final int statusCode;
@@ -41,36 +42,48 @@ class PiHoleHttpException implements Exception {
 /// ==========================================================================
 
 class PiHoleClient {
-  final String hostname;
-  final String _baseUrl;
-  final String sysAdminAccount;
-  final String appPassword;
-  final String sysPassword;
+  String? _hostname;
+  String? _baseUrl;
+  String? _sysAdminAccount;
+  String? _appPassword;
+  String? _sysPassword;
+  bool _initialized = false;
+  String? _authSID;
+
   final http.Client _http;
   final Map<String, String> _headers;
-  String? _authSID;
+  final SettingsService? settingsService;
   final SystemEventService? systemEventService;
 
-  PiHoleClient({
-    required this.hostname,
-    required this.sysAdminAccount,
-    required this.appPassword,
-    required this.sysPassword,
+  PiHoleClient( {
+    this.settingsService,
     this.systemEventService,
     http.Client? httpClient,
     Map<String, String>? defaultHeaders,
   })  : _http = httpClient ?? http.Client(),
-        _baseUrl = 'http://$hostname/api',
         _headers = {
           'Accept': 'application/json',
           ...?defaultHeaders,
         };
+
+  Future<bool?> getConfigurationStatus() async =>
+      await settingsService?.getConfigurationStatus();
 
   void checkAndThrow(http.Response res) {
     if (res.statusCode < 200 || res.statusCode >= 300) {
       _authSID = null;
       throw PiHoleHttpException(res.statusCode, res.body, res.request?.url.path ?? '');
     }
+  }
+
+  void resetService() async {
+    _hostname = null;
+    _baseUrl = null;
+    _sysAdminAccount = null;
+    _appPassword = null;
+    _sysPassword = null;
+    _authSID = null;
+    _initialized = false;
   }
 
   // If your API uses session cookies or CSRF:
@@ -85,10 +98,19 @@ class PiHoleClient {
       Uri.parse('$_baseUrl$path').replace(queryParameters: query);
 
   // Auth (adjust endpoint to match your server)
-  Future<http.Response> authenticate({required String password}) async {
+  Future<http.Response> authenticate() async {
+    if (_initialized == false) {
+      _hostname = await settingsService!.getHostname();
+      _baseUrl = "http://$_hostname/api";
+      _appPassword = await settingsService!.getAppPassword();
+      _sysAdminAccount = await settingsService!.getSysAccount();
+      _sysPassword = await settingsService!.getSysPassword();
+      _initialized = await settingsService!.getConfigurationStatus();
+    }
+
     if (_authSID != null) return http.Response('OK', 200 );
 
-    final jsonBody = json.encode({'password': password});
+    final jsonBody = json.encode({'password': _appPassword});
     final res = await _http.post(Uri.parse('$_baseUrl/auth'), body: jsonBody, headers: _headers);
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -103,7 +125,7 @@ class PiHoleClient {
 
   /// DELETE helper method
   Future<Map<String, dynamic>> _delete(String path) async {
-    await authenticate(password: appPassword);
+    await authenticate();
     final uri = _uri("/$path", {'sid': _authSID!});
 
     final res = await _http.delete(uri, headers: _headers);
@@ -116,8 +138,8 @@ class PiHoleClient {
 
   /// POST helper method (if not already present)
   Future<Map<String, dynamic>> _post(String path, {Object? body}) async {
-    await authenticate(password: appPassword);
-    
+    await authenticate();
+
     Map<String, dynamic> bodyMap;
     if (body is Map<String, dynamic>) {
       bodyMap = {...body, 'sid': _authSID!};
@@ -130,12 +152,12 @@ class PiHoleClient {
         headers: _headers,
       );
       checkAndThrow(res);
-      
+
       // Handle empty or non-JSON responses
       if (res.body.isEmpty) {
         return {'success': true};
       }
-      
+
       try {
         final decoded = json.decode(res.body);
         if (decoded is Map<String, dynamic>) return decoded;
@@ -168,7 +190,7 @@ class PiHoleClient {
   }
 
   Future<Map<String, dynamic>> _get(String path, {Map<String, String>? query}) async {
-    await authenticate(password: appPassword);
+    await authenticate();
     query = {...?query, 'sid': _authSID!};
 
     final res = await _http.get(_uri("/$path", query), headers: _headers);
@@ -181,7 +203,7 @@ class PiHoleClient {
   }
 
   Future<Map<String, dynamic>> _put(String path, {Map<String, Object?>? body}) async {
-    await authenticate(password: appPassword);
+    await authenticate();
     body = {...?body, 'sid': _authSID!};
 
     final jsonBody = json.encode(body, toEncodable: (object) => object.toString());
@@ -193,6 +215,19 @@ class PiHoleClient {
     if (decoded is Map<String, dynamic>) return decoded;
     // Wrap non-object JSON into an object for model parsers expecting a map.
     return {'data': decoded};
+  }
+
+  Future<void> logout() async {
+    if (_authSID == null) return;
+    await _post('/auth/logout', body: {
+
+        'sid': _authSID!,
+        'X-Pi-hole-Authenticated': _authSID!, // Pass the session ID
+        'Accept': 'application/json',
+      },
+    ).timeout(const Duration(seconds: 2));
+
+    _authSID = null;
   }
 
   Future<StatusResponse> putCategoryItem({required String category, required String listitem, required Map<String, Object?> props}) async {
@@ -252,7 +287,7 @@ class PiHoleClient {
     final assignedGroupIds = assignmentsResponse.clientGroups
         .map((a) => a.groupId)
         .toSet();
-    
+
     return groupsResponse.groups!.map((group) {
       return GroupInfo(
         id: group.id,
@@ -264,27 +299,27 @@ class PiHoleClient {
 
   // Update client groups (replace all assignments)
   Future<bool> updateClientGroups(int clientId, List<int> groupIds) async {
-    // 1. Get current assignments
+    // Get current assignments
     final current = await getClientGroups(clientId);
-    
-    // 2. Delete current assignments if any
+
+    // Delete current assignments if any
     if (current.clientGroups.isNotEmpty) {
       final deletePayload = current.clientGroups
           .map((a) => {'client_id': a.clientId, 'group_id': a.groupId})
           .toList();
       await deleteClientGroupsBatch(deletePayload);
     }
-    
-    // 3. Add new assignments
+
+    // Add new assignments
     if (groupIds.isNotEmpty) {
       final assignments = groupIds
           .map((groupId) => {'client_id': clientId, 'group_id': groupId})
           .toList();
       final response = await addClientGroups(assignments: assignments);
-      
+
       return response['errors'] == null || (response['errors'] as List).isEmpty;
     }
-    
+
     return true;
   }
 
@@ -314,7 +349,7 @@ class PiHoleClient {
   Future<bool> enableBlocking() async {
     try {
       final query = {'blocking': true};  // , 'timer': 0
-      final jsonMap = await _post('dns/blocking', body: query ?? {});
+      final jsonMap = await _post('dns/blocking', body: query);
       return jsonMap['blocking'] == 'enabled';
     } catch (e) {
       print('Error enabling blocking: $e');
@@ -347,30 +382,30 @@ class PiHoleClient {
     ssh.SSHClient? sshClient;
     try {
       sshClient = ssh.SSHClient(
-        await ssh.SSHSocket.connect(hostname, 22), 
-        username: sysAdminAccount, 
-        onPasswordRequest: () => sysPassword
+          await ssh.SSHSocket.connect(_hostname!, 22),
+          username: _sysAdminAccount!,
+          onPasswordRequest: () => _sysPassword
       );
-      
+
       await sshClient.authenticated;
-      
+
       print('Executing SSH command: sudo -S $command');
-      
+
       // Use shell with -c flag and pipe password directly
       final session = await sshClient.execute(
-        "/bin/sh -c 'printf \"$sysPassword\\n\" | sudo -S $command'"
+          "/bin/sh -c 'printf \"$_sysPassword\\n\" | sudo -S $command'"
       );
-      
+
       // Collect output from the session
       final output = await session.stdout.map(utf8.decode).join();
       final errors = await session.stderr.map(utf8.decode).join();
-      
+
       print('SSH command stdout: $output');
       if (errors.isNotEmpty) print('SSH command stderr: $errors');
-      
+
       final exitCode = await session.exitCode;
       print('SSH command exit code: $exitCode');
-      
+
       return exitCode == 0;
     } catch (e, stackTrace) {
       print('SSH command error: $e');
@@ -379,11 +414,16 @@ class PiHoleClient {
     } finally {
       sshClient?.close();
     }
-  } 
+  }
 
   Future<bool> restartDNS() async => executeSSHCommand('systemctl restart pihole-FTL');
-  Future<bool> flushNetworkTable() async => executeSSHCommand('pihole restartdns reload-lists');
-  
+
+  Future<bool> flushNetworkCache() async {
+    bool sts = await executeSSHCommand('pihole networkflush --arp')
+             & await executeSSHCommand('sudo pihole reloaddns');
+    return sts;
+  }
+
   /// Reboot system with optional event monitoring
   Future<bool> rebootSystem() async {
     _authSID = null;
@@ -400,10 +440,10 @@ class PiHoleClient {
   /// Check if the PiHole API is responding (health check)
   Future<bool> checkHealth() async {
     try {
-      final res = await authenticate(password: appPassword).timeout(const Duration(seconds: 5));
+      final res = await authenticate().timeout(const Duration(seconds: 5));
       return res.statusCode == 200 || res.statusCode == 401; // 401 means service is up but not authenticated
     } catch (e) {
-      print('Health check failed: $e');
+      // print('Health check failed: $e');
       return false;
     }
   }

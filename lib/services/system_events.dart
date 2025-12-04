@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'settings_service.dart';
+
 /// Enum representing the system reboot state
 enum RebootState {
   idle,
@@ -35,20 +37,24 @@ class RebootEvent {
 /// Event model for service readiness status changes
 class ServiceReadinessEvent {
   final ServiceState state;
+  final String? host;
   final String? message;
   final DateTime timestamp;
 
   ServiceReadinessEvent({
     required this.state,
+    this.host,
     this.message,
   }) : timestamp = DateTime.now();
 
   @override
-  String toString() => 'ServiceReadinessEvent(state: $state, message: $message, time: $timestamp)';
+  String toString() => 'ServiceReadinessEvent(state: $state, message: $message, host: $host, time: $timestamp)';
 }
 
 /// Service class that manages system event streams
 class SystemEventService {
+  final SettingsService _settingsService = SettingsService();
+
   // Private stream controllers
   final _rebootController = StreamController<RebootEvent>.broadcast();
   final _serviceController = StreamController<ServiceReadinessEvent>.broadcast();
@@ -72,9 +78,10 @@ class SystemEventService {
   }
 
   /// Emit a service readiness event
-  void emitServiceEvent(ServiceState state, {String? message}) {
+  void emitServiceEvent(ServiceState state, {String? message}) async {
     _currentServiceState = state;
-    final event = ServiceReadinessEvent(state: state, message: message);
+    String? host = await _settingsService.getHostname();
+    final event = ServiceReadinessEvent(state: state, host: host, message: message);
     _serviceController.add(event);
   }
 
@@ -95,7 +102,7 @@ class SystemEventService {
       try {
         final isHealthy = await healthCheck();
         if (isHealthy) {
-          emitServiceEvent(ServiceState.ready, message: 'Service is ready');
+          emitServiceEvent(ServiceState.ready, message: 'Service is ready' );
           emitRebootEvent(RebootState.complete, message: 'Reboot completed successfully');
           return;
         }

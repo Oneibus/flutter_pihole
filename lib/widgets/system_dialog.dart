@@ -1,49 +1,55 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_pihole_client/widgets/app_settings.dart';
 import 'enable_disable_blocking_dialog.dart';
 
 /// A callback function type for system operations
 typedef SystemOperationCallback = Future<bool> Function();
 typedef EnableDisableCallback = Future<bool> Function({int? duration});
 typedef GetBlockingStatusCallback = Future<bool> Function();
+typedef ApplicationSettingsCallback = Future<void> Function();
 
 /// A dialog for system operations like restart DNS, flush network table, and reboot
 class SystemDialog extends StatefulWidget {
   final SystemOperationCallback onRestartDNS;
-  final SystemOperationCallback onFlushNetworkTable;
+  final SystemOperationCallback onFlushNetworkCache;
   final SystemOperationCallback onRebootSystem;
   final EnableDisableCallback onEnableBlocking;
   final EnableDisableCallback onDisableBlocking;
   final GetBlockingStatusCallback onGetBlockingStatus;
+  final ApplicationSettingsCallback onApplicationSettings;
 
   const SystemDialog({
     super.key,
     required this.onRestartDNS,
-    required this.onFlushNetworkTable,
+    required this.onFlushNetworkCache,
     required this.onRebootSystem,
     required this.onEnableBlocking,
     required this.onDisableBlocking,
     required this.onGetBlockingStatus,
+    required this.onApplicationSettings,
   });
 
   /// Static method to show the dialog
   static Future<void> show({
     required BuildContext context,
     required SystemOperationCallback onRestartDNS,
-    required SystemOperationCallback onFlushNetworkTable,
+    required SystemOperationCallback onFlushNetworkCache,
     required SystemOperationCallback onRebootSystem,
     required EnableDisableCallback onEnableBlocking,
     required EnableDisableCallback onDisableBlocking,
     required GetBlockingStatusCallback onGetBlockingStatus,
+    required ApplicationSettingsCallback onApplicationSettings,
   }) {
     return showDialog<void>(
       context: context,
       builder: (context) => SystemDialog(
         onRestartDNS: onRestartDNS,
-        onFlushNetworkTable: onFlushNetworkTable,
+        onFlushNetworkCache: onFlushNetworkCache,
         onRebootSystem: onRebootSystem,
         onEnableBlocking: onEnableBlocking,
         onDisableBlocking: onDisableBlocking,
         onGetBlockingStatus: onGetBlockingStatus,
+        onApplicationSettings: onApplicationSettings,
       ),
     );
   }
@@ -60,6 +66,19 @@ class _SystemDialogState extends State<SystemDialog> {
   void initState() {
     super.initState();
     _loadBlockingStatus();
+  }
+
+  Future<void> _handleAppSettings() async {
+    /// Show the Settings page
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const SettingsScreen()),
+    );
+
+    // When returning, refresh connection/UI in case URL changed
+    setState(() {
+      final success = widget.onApplicationSettings();
+    });
   }
 
   Future<void> _loadBlockingStatus() async {
@@ -121,10 +140,10 @@ class _SystemDialogState extends State<SystemDialog> {
     }
   }
 
-  Future<void> _handleFlushNetworkTable() async {
+  Future<void> _handleFlushNetworkCache() async {
     setState(() => _isProcessing = true);
     try {
-      final success = await widget.onFlushNetworkTable();
+      final success = await widget.onFlushNetworkCache();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -219,6 +238,19 @@ class _SystemDialogState extends State<SystemDialog> {
             children: [
               // Toggle Enable/Disable Blocking Button
               ElevatedButton.icon(
+                onPressed: _handleAppSettings,
+                icon: const Icon(Icons.settings),
+                label: Text('App Settings'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurple[500],
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Toggle Enable/Disable Blocking Button
+              ElevatedButton.icon(
                 onPressed: _isProcessing ? null : _handleToggleBlocking,
                 icon: Icon(_blockingEnabled ? Icons.block : Icons.check_circle),
                 label: Text(_blockingEnabled ? 'Disable Blocking' : 'Enable Blocking'),
@@ -245,9 +277,9 @@ class _SystemDialogState extends State<SystemDialog> {
               
               // Flush Network Table Button
               ElevatedButton.icon(
-                onPressed: _isProcessing ? null : _handleFlushNetworkTable,
+                onPressed: _isProcessing ? null : _handleFlushNetworkCache,
                 icon: const Icon(Icons.network_check),
-                label: const Text('Flush Network Table'),
+                label: const Text('Flush Network'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
                   foregroundColor: Colors.white,
