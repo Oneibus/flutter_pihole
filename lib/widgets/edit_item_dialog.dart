@@ -1,226 +1,156 @@
 import 'package:flutter/material.dart';
+import 'common_dialog.dart';
 
-/// A callback function type for handling item updates
-typedef ItemUpdateCallback = Future<void> Function(String category, String name, Map<String, Object?> props);
+class DynamicItemEditDialog {
+  static Future<void> show(BuildContext context, IconData icon, String title, Widget dialogContent,
+        Function()? onSave, 
+        Function()? onCancel) {
 
-/// A reusable dialog for editing item properties
-class EditItemDialog extends StatefulWidget {
-  final String category;
-  final String initialName;
-  final String? initialComment;
-  final String? initialStatus;
-  final ItemUpdateCallback onUpdate;
-
-  const EditItemDialog({
-    super.key,
-    required this.category,
-    required this.initialName,
-    required this.initialComment,
-    this.initialStatus,
-    required this.onUpdate,
-  });
-
-  /// Static method to show the dialog
-  static Future<void> show({
-    required BuildContext context,
-    required String category,
-    required String initialName,
-    required String? initialComment,
-    String? initialStatus,
-    required ItemUpdateCallback onUpdate,
-  }) {
-    return showDialog<void>(
-      context: context,
-      builder: (context) => EditItemDialog(
-        category: category,
-        initialName: initialName,
-        initialComment: initialComment,
-        initialStatus: initialStatus,
-        onUpdate: onUpdate,
-      ),
-    );
+    return DialogBuilder()
+        .setTitle(title)
+        .setTitleIcon(icon)
+        .setSpacable(true)
+        .setTitleBackgroundColor(Colors.green[800]!)
+        .setWidth(440) // Fixed width: 120+120+120 + 8+8 spacing + 32 padding
+        .setMaxHeight(200) // Enough height for content + buttons at bottom
+        .setContent(
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: dialogContent,
+          ),
+        )
+        .setActions([
+          ElevatedButton.icon(
+            onPressed: onSave,
+            icon: const Icon(Icons.save, size: 14),
+            label: Text('Save'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green[700],
+              foregroundColor: Colors.white,
+              // padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            ),
+          ),
+          const SizedBox(width: 4),
+          ElevatedButton.icon(
+            onPressed: onCancel,
+            label: const Text('Cancel'),
+            icon: const Icon(Icons.cancel, size: 14),
+          ),
+        ]).show<bool>(context);
   }
-
-  @override
-  State<EditItemDialog> createState() => _EditItemDialogState();
 }
 
-class _EditItemDialogState extends State<EditItemDialog> {
-  late TextEditingController _nameController;
-  late TextEditingController _commentController;
-  late String _status;
+Widget editItemDialogContent(
+  TextEditingController primaryController,
+  TextEditingController secondaryController,
+  String status,
+  Function(String) onPrimaryChanged,
+  Function(String) onSecondaryChanged,
+  Function(String?) onStatusChanged) {
 
-  @override
-  void initState() {
-    super.initState();
-    _nameController = TextEditingController(text: widget.initialName);
-    _commentController = TextEditingController(text: widget.initialComment);
-    _status = widget.initialStatus ?? 'enabled';
-  }
+  final TextStyle _textStyle = const TextStyle(color: Colors.black, fontSize: 12, fontWeight: FontWeight.w400);
+  final TextStyle _scaleDropTextStyle = const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.w400);
+  final Color _cursorColor = Colors.green[800]!;
+  final Color _bkgndCursorColor = Colors.grey;
+  final BoxDecoration _boxDecoration = BoxDecoration(
+    border: Border.all(color: Colors.green[800]!, width: 1, strokeAlign: BorderSide.strokeAlignCenter),
+    borderRadius: BorderRadius.circular(8),
+  );
+  final OutlineInputBorder _dropDownBorder = OutlineInputBorder(
+    borderRadius: BorderRadius.circular(10),
+    borderSide: BorderSide(color: Colors.green[800]!, width: 1),
+  );
 
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _commentController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _handleSave() async {
-    try {
-      await widget.onUpdate(
-        widget.category,
-        widget.initialName,
-        {
-          'name': _nameController.text,
-          'comment': _commentController.text == "" ? null : _commentController.text,
-          'enabled': _status == 'enabled' ? true : false,
-        },
-      );
-      if (mounted) {
-        Navigator.of(context).pop();
-      }
-    } catch (e) {
-      // Handle error - could show a snackbar or error dialog
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error updating item: $e')),
-        );
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SimpleDialog(
-      backgroundColor: Colors.grey[50],
-      titlePadding: const EdgeInsets.all(4.0),
-      title: Text(widget.category),
-      titleTextStyle: TextStyle(
-        color: Colors.green[800],
-        fontSize: 16,
-        fontWeight: FontWeight.bold,
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8.0), // Adjust radius as needed
-      ),
-
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Column(
+  return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Name and Status Row
+              // First row: Name and Comment inputs
               Row(
-                children: [
+                /// mainAxisSize: MainAxisSize.min,
+                  children: [
                   // Name Input
-                  Container(
-                    width: 120,
-                    height: 32,
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.green[800]!),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: EditableText(
-                      controller: _nameController,
-                      focusNode: FocusNode(),
-                      style: const TextStyle(
-                        color: Colors.black,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w400,
-                      ),
-                      cursorColor: Colors.green[800]!,
-                      backgroundCursorColor: Colors.grey,
-                      onChanged: (value) {
-                        // Optional: Add real-time validation here
-                      },
-                    ),
-                  ),
+                  Expanded(
+                    flex: 3,
+                    child: Container(alignment: Alignment.centerLeft,
+                      width: 220, height: 32,
+                      padding: const EdgeInsets.all(4),
+                      decoration: _boxDecoration,
 
-                  const SizedBox(width: 16),
-                  // Comment Input
-                  Container(
-                    width: 120,
-                    height: 32,
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.green[800]!),
-                      borderRadius: BorderRadius.circular(4),
+                      child: EditableText(
+                        controller: primaryController,
+                        focusNode: FocusNode(),
+                        style: _textStyle,
+                        cursorColor: _cursorColor,
+                        backgroundCursorColor: _bkgndCursorColor,
+                        onChanged: (value) {
+                            onPrimaryChanged(value);
+                        },
+                      ),
                     ),
-                    child: EditableText(
-                      controller: _commentController,
-                      focusNode: FocusNode(),
-                      style: const TextStyle(
-                        color: Colors.black,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w400,
-                      ),
-                      cursorColor: Colors.green[800]!,
-                      backgroundCursorColor: Colors.grey,
-                      onChanged: (value) {
-                        // Optional: Add real-time validation here
-                      },
-                    ),
-                  ),
-
-                  const SizedBox(width: 16),
-                  // Status Dropdown
-                  Container(
-                    width: 132,
-                    height: 32,
-                    padding: EdgeInsets.zero,
-                    child: DropdownMenu<String>(
-                      width: 124,
-                      dropdownMenuEntries: const [
-                        DropdownMenuEntry(value: 'enabled', label: 'enabled'),
-                        DropdownMenuEntry(value: 'disabled', label: 'disabled'),
-                      ],
-                      menuStyle: const MenuStyle(
-                        padding: WidgetStatePropertyAll(EdgeInsets.zero),
-                      ),
-                      inputDecorationTheme: const InputDecorationTheme(
-                        isDense: true,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-                        border: OutlineInputBorder(borderSide: BorderSide.none),
-                      ),
-                      textStyle: const TextStyle(
-                        color: Colors.black,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w400,
-                      ),
-                      initialSelection: _status,
-                      onSelected: (String? value) {
-                        if (value != null) {
-                          setState(() {
-                            _status = value;
-                          });
-                        }
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              
-              const SizedBox(height: 24),
-              // Action Buttons Row
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: _handleSave,
-                    child: const Text('Save'),
                   ),
                   const SizedBox(width: 8),
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Cancel'),
+                  // Comment Input
+                  Expanded(
+                    flex: 3,
+                    child: Container(alignment: Alignment.centerLeft,
+                      width: 140, height: 32,
+                      padding: const EdgeInsets.all(4),
+                      decoration: _boxDecoration,
+
+                      child: EditableText(
+                        controller: secondaryController,
+                        focusNode: FocusNode(),
+                        style: _textStyle,
+                        cursorColor: _cursorColor,
+                        backgroundCursorColor: _bkgndCursorColor,
+                        onChanged: (value) {
+                          onSecondaryChanged(value);
+                        },
+                      ),
+                    ),
                   ),
                 ],
               ),
+
+              const SizedBox(height: 8),
+
+              // Second row: Status Dropdown
+              ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: 160,
+                  maxHeight: 32,
+                  minHeight: 32,
+                ),
+                child: Transform.scale(
+                  scale: 0.80,
+                  alignment: Alignment.centerLeft,
+                  child: DropdownMenu<String>(
+                    width: 140,
+                    menuHeight: 200,
+                    alignmentOffset: const Offset(0, 4),
+                    dropdownMenuEntries: const [
+                      DropdownMenuEntry(value: 'enabled', label: 'enabled'),
+                      DropdownMenuEntry(value: 'disabled', label: 'disabled'),
+                    ],
+                    menuStyle: const MenuStyle(padding: WidgetStatePropertyAll(EdgeInsets.zero)),
+                    inputDecorationTheme: InputDecorationTheme(
+                      isDense: true,
+                      // contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                      border: _dropDownBorder,
+                      enabledBorder: _dropDownBorder,
+                      focusedBorder: _dropDownBorder,
+                    ),
+                    trailingIcon: const Icon(Icons.arrow_drop_down, size: 16),
+                    selectedTrailingIcon: const Icon(Icons.arrow_drop_up, size: 16),
+                    textStyle: _scaleDropTextStyle,
+                    initialSelection: status,
+                    onSelected: (String? value) {
+                      onStatusChanged(value);
+                    },
+                  ),
+                ),
+              ),
             ],
-          ),
-        ),
-      ],
-    );
-  }
+          );
 }

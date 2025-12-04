@@ -1,11 +1,11 @@
-import 'dart:io' show Platform;
+// import 'dart:io' show Platform;
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'pihole/pihole_service.dart';
-import 'pihole/pihole_client.dart';
-import 'pihole/system_events.dart';
+
+import 'services/system_events.dart';
+import 'services/data_services.dart';
 import 'widgets/edit_item_dialog.dart';
-import 'widgets/system_dialog.dart';
+import 'widgets/edit_client_groups_dialog.dart';
 
 void main() {
   runApp(const MyApp());
@@ -29,7 +29,8 @@ class MasterDetailPage extends StatefulWidget {
   State<MasterDetailPage> createState() => _MasterDetailPageState();
 }
 
-class _MasterDetailPageState extends State<MasterDetailPage> {
+class _MasterDetailPageState extends State<MasterDetailPage> with WidgetsBindingObserver {
+
   static const categories = <String>[
     'Groups',
     'Clients',
@@ -42,6 +43,7 @@ class _MasterDetailPageState extends State<MasterDetailPage> {
   static String _selected = categories.first;
   int _refreshKey = 0; // Key to force refresh
   bool _isRebooting = false; // Track reboot state
+  String? _piholeHost = '';
 
   StreamSubscription<RebootEvent>? _rebootSubscription;
   StreamSubscription<ServiceReadinessEvent>? _serviceSubscription;
@@ -49,13 +51,131 @@ class _MasterDetailPageState extends State<MasterDetailPage> {
   @override
   void initState() {
     super.initState();
-    _setupEventListeners();
+    WidgetsBinding.instance.addObserver(this);
+    _initializeApp();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    DataService.systemEvents.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.detached) {
+      // The engine is shutting down (User swiped away the app or OS killed it)
+      // Note: Network calls here are "best effort" and may not always complete
+      // on mobile OSs due to strict background limits, but it helps.
+      DataService.logout();
+    }
+  }
+
+  // Initialize application and load initial DNS blocking status
+  Future<void> _initializeApp() async {
+    try {
+      await _setupEventListeners();
+    } catch (e) {
+      // Silently handle initialization errors
+      debugPrint('Failed to initialize blocking status: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Row(
+          children: [
+            Image.asset(
+              'assets/images/PiHoleControl.png',
+              height: 56,
+              width: 185,
+            ),
+          ],
+        ),
+        titleSpacing: 0,
+        backgroundColor: const Color(0xFF222222),
+      ),
+
+      body: Row(
+        children: [
+          // Left panel
+          Container(
+            width: 100,
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            child: ListView.separated(
+              itemCount: categories.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (ctx, i) {
+                final name = categories[i];
+                final selected = _selected == name;
+                // Use InkWell + Container instead of ListTile for narrow columns
+                return InkWell(
+                  onTap: _isRebooting ? null : () {
+                    setState(() {
+                      _selected = name;
+                    });
+                  },
+                  child: Container(
+                    height: 48, // Fixed comfortable height
+                    alignment: Alignment.centerLeft, // Ensure text starts at left
+                    padding: const EdgeInsets.symmetric(horizontal: 12.0), // Manual padding
+                    color: selected ? Colors.green[200] : null, // Selection background
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: selected ? 14 : 12,
+                        // Use onSurface so it adapts to Dark/Light mode automatically
+                        color: selected
+                            ? Colors.green[900]
+                            : Theme.of(context).colorScheme.onSurface,
+                        fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const VerticalDivider(width: 2),
+          // Right panel
+          Expanded(
+            child: CategoryListView(
+              key: ValueKey('$_selected-$_refreshKey'), // Force rebuild when key changes
+              category: _selected,
+              isRebooting: _isRebooting,
+              onItemUpdate: (category, initialName, props) async {
+                await DataService.updateItem(category, initialName, props: props);
+                // Trigger refresh after update
+                setState(() {
+                  _refreshKey++;
+                });
+              },
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: BottomAppBar(
+        height: 48,
+        child: Padding(
+          padding: const EdgeInsets.all(2.0),
+          child: NavigationToolbar(
+            middle: Text(_isRebooting ? 'Connection pending...' : 'Connected to: $_piholeHost'),
+          ),
+        ),
+      ),
+    );
   }
 
   // Setup listeners for system events and show SnackBars accordingly
-  //
-  void _setupEventListeners() {
+  Future<void> _setupEventListeners() async {
+    await DataService.initializeBlockingStatus();
     // Listen to reboot events
+
     _rebootSubscription = DataService.systemEvents.rebootStream.listen((event) {
       if (!mounted) return;
 
@@ -104,8 +224,8 @@ class _MasterDetailPageState extends State<MasterDetailPage> {
         SnackBar(
           content: Text(message),
           backgroundColor: backgroundColor,
-          duration: event.state == RebootState.pending 
-              ? const Duration(seconds: 5) 
+          duration: event.state == RebootState.pending
+              ? const Duration(seconds: 5)
               : const Duration(seconds: 3),
         ),
       );
@@ -126,6 +246,10 @@ class _MasterDetailPageState extends State<MasterDetailPage> {
         case ServiceState.ready:
           message = event.message ?? 'Service is ready';
           backgroundColor = Colors.green;
+          setState(() {
+            _piholeHost = event.host;
+            _refreshKey++;
+          });
           break;
         case ServiceState.unavailable:
           message = event.message ?? 'Service unavailable';
@@ -145,98 +269,7 @@ class _MasterDetailPageState extends State<MasterDetailPage> {
     });
   }
 
-  @override
-  void dispose() {
-    _rebootSubscription?.cancel();
-    _serviceSubscription?.cancel();
-    super.dispose();
-  }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            Image.asset(
-              'assets/images/PiHoleControl.png',
-              height: 56,
-              width: 185,
-            ),
-            // const SizedBox(width: 8),
-            // const Text("PiHole Control!"),
-          ],
-        ),
-        titleSpacing: 0,
-        backgroundColor: const Color(0xFF222222),
-      ),
-
-      body: Row(
-        children: [
-          // Left panel
-          Container(
-            width: 160,
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            child: ListView.separated(
-              itemCount: categories.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (ctx, i) {
-                final name = categories[i];
-                final selected = _selected == name;
-
-                return SizedBox(
-                  height: 40, // Fixed height of 40 pixels
-                  child: ListTile(
-                    title: Text(
-                      name, 
-                      style: TextStyle(
-                        fontSize: selected ? 14 : 12,
-                        color: selected ? Colors.green[900] : Colors.black,
-                        fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                      ),
-                    ),
-                    selected: selected,
-                    selectedTileColor: Colors.green[200],
-                    enabled: !_isRebooting, // Disable during reboot
-                    onTap: _isRebooting ? null : () {
-                      setState(() {
-                        _selected = name;
-                      });
-                    },
-                  ),
-                );
-              },
-            ),
-          ),
-          const VerticalDivider(width: 2),
-          // Right panel
-          Expanded(
-            child: CategoryListView(
-              key: ValueKey('$_selected-$_refreshKey'), // Force rebuild when key changes
-              category: _selected,
-              isRebooting: _isRebooting,
-              onItemUpdate: (category, initialName, props) async {
-                await DataService.updateItem(category, initialName, props: props);
-                // Trigger refresh after update
-                setState(() {
-                  _refreshKey++;
-                });
-              },
-            ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: BottomAppBar(
-        height: 48,
-        child: Padding(
-          padding: const EdgeInsets.all(2.0),
-          child: NavigationToolbar(
-            middle: Text(_isRebooting ? 'Connection pending...' : 'Connected to: ${DataService.baseUrl}'),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class UnusedCategoryListView extends StatelessWidget {
@@ -246,7 +279,7 @@ class UnusedCategoryListView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
 
-    final futureBuilder = FutureBuilder<List<String>>(key: ValueKey(category), // reset when category changes
+    final futureBuilder = FutureBuilder<List<dynamic>>(key: ValueKey(category), // reset when category changes
                                        future: DataService.fetchItems(category),
                                        builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
@@ -264,7 +297,8 @@ class UnusedCategoryListView extends StatelessWidget {
 
         return ListView.separated(itemCount: items.length, separatorBuilder: (_, __) => const Divider(height: 1), itemBuilder: (context, index) {
             final item = items[index];
-            return ListTile(title: Text(item, style: const TextStyle(fontSize: 10)), onTap: () {
+            return ListTile(title: Text(item, style: const TextStyle(fontSize: 10)), 
+              onTap: () {
               // Optional: handle item tap
               });
           },
@@ -275,6 +309,8 @@ class UnusedCategoryListView extends StatelessWidget {
     return futureBuilder;
   }
 }
+
+typedef ItemUpdateCallback = Future<void> Function(String category, String name, Map<String, Object?> props);
 
 class CategoryListView extends StatefulWidget {
   final String category;
@@ -307,10 +343,12 @@ class _CategoryListViewState extends State<CategoryListView> {
       padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 2),
       child: Row( 
         children: [
-          const SizedBox(width: 40, 
+          // item number
+          const SizedBox(width: 30, 
             child: Text('#', 
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500))),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500))),
 
+          // primary column
           const Expanded(
             flex: 3,
             child: Padding(
@@ -322,6 +360,7 @@ class _CategoryListViewState extends State<CategoryListView> {
             ),
           ),
 
+          // secondary column
           const Expanded(
             flex: 3,
             child: Padding(
@@ -333,6 +372,7 @@ class _CategoryListViewState extends State<CategoryListView> {
             ),
           ),
 
+          // status column
           const SizedBox(width: 60, 
             child: Padding(
               padding: EdgeInsets.only(left: 0),
@@ -347,45 +387,80 @@ class _CategoryListViewState extends State<CategoryListView> {
     );
   }
 
-  Widget _buildItemRow(BuildContext context, String item, int index) {
+  Widget _buildItemRow(BuildContext context, dynamic item, int index) {
     // Try to split a primary / secondary line by common separators.
-    String primary = item;
-    String? secondary;
-    String? status;
-    
-    if (item.contains(' — ')) {
-      final parts = item.split(' — ');
-      primary = parts.first;
-      secondary = parts.length > 1 ? parts[1] : null;
-      status = parts.length > 2 ? parts.sublist(2).join(' — ') : null;
-    } else if (item.contains(" - ")) {
-      final parts = item.split(' - ');
-      primary = parts.first;
-      secondary = parts.length > 1 ? parts[1] : null;
-      status = parts.length > 2 ? parts.sublist(2).join(' - ') : null;
-    } else if (item.contains('|')) {
-      final parts = item.split('|').map((s) => s.trim()).toList();
-      primary = parts.first;
-      secondary = parts.length > 1 ? parts[1] : null;
-      status = parts.length > 2 ? parts[2].trim() : null;
-    } else {
-      // try to extract trailing status in parentheses, e.g. "domain (blocked)"
-      final m = RegExp(r'^(.*?)(\s+\([^)]+\))$').firstMatch(item);
-      if (m != null) {
-        primary = m.group(1) ?? item;
-        status = (m.group(2) ?? '').trim();
-      }
-    }
+    int id = item['id'];
+    String? primary = item['primary'];
+    String? secondary = item['secondary'];
+    String? status = item['status'];
 
     return InkWell(
-      onTap: (widget.onItemUpdate != null && !widget.isRebooting) ? () async {
-        await EditItemDialog.show(
-          context: context,
-          category: widget.category,
-          initialName: primary,
-          initialComment: secondary,
-          initialStatus: status,
-          onUpdate: widget.onItemUpdate!,
+
+      onTap: (mounted && widget.onItemUpdate != null && !widget.isRebooting) ? () async {
+        if (widget.category.toLowerCase() == 'clients') {
+          // Parse client ID from primary (assuming it's the first part)
+          final groups = await DataService.getGroupsForClient(id);
+
+          await EditClientGroupsDialog.show(
+            context: context,
+            category: widget.category,
+            clientId: id,
+            clientName: primary ?? '',
+            availableGroups: groups,
+            onUpdate: (clientId, groupIds) async {
+              await DataService.updateClientGroups(clientId, groupIds);
+            },
+          );
+          return;
+        }
+
+        // Create controllers that will be managed by the dialog
+        final nameController = TextEditingController(text: primary ?? '');
+        final commentController = TextEditingController(text: secondary ?? '');
+        String currentStatus = status ?? 'disabled';
+
+        await DynamicItemEditDialog.show(
+          context, 
+          Icons.edit, 
+          widget.category, 
+          editItemDialogContent(
+            nameController,
+            commentController,
+            currentStatus,
+            (String value) => primary = value,
+            (String value) => secondary = value,
+            (String? value) => currentStatus = value ?? currentStatus
+          ), 
+          () async {
+            // Save callback
+            if (mounted && widget.onItemUpdate != null) {
+              await widget.onItemUpdate!(
+                widget.category, 
+                primary ?? '', 
+                {
+                  // RFJ: refactor to use property names per category
+                  'name': nameController.text,
+                  'comment': commentController.text.isEmpty ? null : commentController.text,
+                  'enabled': currentStatus == 'enabled',
+                },
+              );
+              if (mounted) {
+                Navigator.of(context).pop();
+              }
+            }
+            // Dispose controllers after save
+            nameController.dispose();
+            commentController.dispose();
+          },  
+          () {
+            // Cancel callback
+            if (mounted) {
+              Navigator.of(context).pop();
+            }
+            // Dispose controllers after cancel
+            nameController.dispose();
+            commentController.dispose();
+          }
         );
       } : null,
 
@@ -402,7 +477,7 @@ class _CategoryListViewState extends State<CategoryListView> {
           children: [
             // Index/Number column
             SizedBox(
-              width: 40,
+              width: 30,
               child: Padding(
                 padding: const EdgeInsets.only(left: 0),
                 child: Text(
@@ -422,7 +497,7 @@ class _CategoryListViewState extends State<CategoryListView> {
               child: Padding(
                 padding: const EdgeInsets.only(left: 0),
                 child: Text(
-                  primary,
+                  primary ?? '',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     fontSize: 12,
                     fontWeight: FontWeight.w400,
@@ -439,7 +514,7 @@ class _CategoryListViewState extends State<CategoryListView> {
               child: Padding(
                 padding: const EdgeInsets.only(left: 0),
                 child: Text(
-                  secondary,
+                  secondary ?? '',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     fontSize: 12,
                     fontWeight: FontWeight.w400,
@@ -453,13 +528,13 @@ class _CategoryListViewState extends State<CategoryListView> {
             // Status column
             if (status != null)
               SizedBox(
-                width: 80,
+                width: 60,
                 child: Padding(
                   padding: const EdgeInsets.only(left: 0),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: status.contains('disabled') 
+                      color: status.contains('disabled')
                           ? Colors.red[110] 
                           : Colors.green[110],
                       borderRadius: BorderRadius.circular(8),
@@ -467,7 +542,7 @@ class _CategoryListViewState extends State<CategoryListView> {
                     child: Text(
                       status,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: status.contains('disabled') 
+                        color: status.contains('disabled')
                             ? Colors.red[800] 
                             : Colors.green[800],
                         fontSize: 10,
@@ -489,16 +564,17 @@ class _CategoryListViewState extends State<CategoryListView> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        FutureBuilder<List<String>>(
+        FutureBuilder<List<dynamic>>(
           key: ValueKey(widget.category), // reset when category changes
           future: DataService.fetchItems(widget.category),
           builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
+            while (snapshot.connectionState != ConnectionState.done) {
               return const Center(child: CircularProgressIndicator());
             }
 
-            if (snapshot.hasError) {
-                return const Center(child: CircularProgressIndicator(color: Colors.orange));
+            if (snapshot.connectionState == ConnectionState.done && snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+                // return const Center(child: CircularProgressIndicator(color: Colors.orange));
             }
             // if (snapshot.hasError){
             //   return Center(child: Text('Error: ${snapshot.error}'));
@@ -562,51 +638,5 @@ class _CategoryListViewState extends State<CategoryListView> {
           ),
       ],
     );
-  }
-}
-
-class DataService {
-  // Read from Windows environment variables (fallbacks included)
-  static final Map<String, String> _env = (() {
-    try {
-      return Platform.environment;
-    } catch (_) {
-      return const <String, String>{};
-    }
-  })();
-
-  static final String baseUrl = _env['PIHOLE_APP_HOSTURL'] ?? 'http://localhost';
-  static final String appPassword = _env['PIHOLE_APP_PASSWORD'] ?? 'generated_app_password';
-  static final String sysAccount = _env['PIHOLE_SYS_ACCOUNT'] ?? 'manually set for PiHole admin user name';
-  static final String sysPassword = _env['PIHOLE_SYS_PASSWORD'] ?? 'manually set sys_password for PiHole admin user';
-
-  // System event service instance
-  static final SystemEventService systemEvents = SystemEventService();
-
-  static final _service = PiHoleService(
-    PiHoleClient(
-      // baseUrl: '$baseUrl/api',
-      hostname: Uri.parse(baseUrl).host,
-      sysAdminAccount: sysAccount,
-      appPassword: appPassword,
-      sysPassword: sysPassword,
-      systemEventService: systemEvents,
-    ),
-  );
-
-  static Future<List<String>> fetchItems(String category) {
-    return _service.listForCategory(category);
-  }
-
-  static Future<bool> updateItem(String category, String itemName,{Map<String, Object?>? props}) {
-    return _service.updateCategoryItem(category, itemName, props: props);
-  }
-
-  static Widget buildSystemDialog({required BuildContext context}) {
-    return SystemDialog(
-      onFlushNetworkTable: _service.flushNetworkTable,
-      onRestartDNS: _service.restartDNS,
-      onRebootSystem: _service.rebootSystem,  
-   );
   }
 }

@@ -2,6 +2,8 @@ import 'dart:convert';
 
 T? _asOrNull<T>(dynamic v) => v is T ? v : null;
 
+String _asStringOrEmpty(dynamic v) => v is String ? v : '';
+
 int? _asInt(dynamic v) {
   if (v == null) return null;
   if (v is int) return v;
@@ -195,7 +197,7 @@ class NetworkResponse {
 
   factory NetworkResponse.fromJson(Map<String, dynamic> json) =>
       NetworkResponse(
-        networks: _asList<Network>(json['networks'], Network.fromJson),
+        networks: _asList<Network>(json['devices'], Network.fromJson),
       );
 }
 
@@ -223,6 +225,61 @@ class Network {
       );
 }
 
+class ClientGroupAssignment {
+  final int clientId;
+  final String clientIp;
+  final int groupId;
+  final String groupName;
+
+  ClientGroupAssignment({
+    required this.clientId,
+    required this.clientIp,
+    required this.groupId,
+    required this.groupName,
+  });
+
+  factory ClientGroupAssignment.fromJson(Map<String, dynamic> json) {
+    return ClientGroupAssignment(
+      clientId: json['client_id'] as int,
+      clientIp: json['client_ip'] as String,
+      groupId: json['group_id'] as int,
+      groupName: json['group_name'] as String,
+    );
+  }
+}
+
+class ClientGroupsResponse {
+  final List<ClientGroupAssignment> clientGroups;
+
+  ClientGroupsResponse({required this.clientGroups});
+
+  factory ClientGroupsResponse.fromJson(Map<String, dynamic> json) {
+    return ClientGroupsResponse(
+      clientGroups: (json['client_groups'] as List)
+          .map((item) => ClientGroupAssignment.fromJson(item))
+          .toList(),
+    );
+  }
+}
+
+class ClientGroupsBatchResponse {
+  final List<Map<String, dynamic>> success;
+  final List<Map<String, dynamic>> errors;
+
+  ClientGroupsBatchResponse({
+    required this.success,
+    required this.errors,
+  });
+
+  factory ClientGroupsBatchResponse.fromJson(Map<String, dynamic> json) {
+    final processed = json['processed'] as Map<String, dynamic>;
+    return ClientGroupsBatchResponse(
+      success: (processed['success'] as List).cast<Map<String, dynamic>>(),
+      errors: (processed['errors'] as List).cast<Map<String, dynamic>>(),
+    );
+  }
+}
+
 class GroupsResponse {
   final List<Group>? groups;
   GroupsResponse({this.groups});
@@ -235,23 +292,65 @@ class GroupsResponse {
 
 class Group {
   final int id;
-  final String? name;
-  final String? description;
+  final String name;
+  final String description;
   final bool enabled;
 
   Group({
     required this.id,
-    this.name,
-    this.description,
+    required this.name,
+    required this.description,
     required this.enabled,
   });
 
   factory Group.fromJson(Map<String, dynamic> json) => Group(
         id: _asInt(json['id']) ?? 0,
-        name: _asOrNull<String>(json['name']),
-        description: _asOrNull<String>(json['description']),
+        name: _asStringOrEmpty(json['name']),
+        description: _asStringOrEmpty(json['description']),
         enabled: _asBool(json['enabled']) ?? false,
       );
+}
+
+/// Model for group information matching FTL API response
+/// API format: {"group_id": 0, "group_name": "Default"}
+/// 
+class GroupInfoListResponse {
+  final List<GroupInfo>? groupInfos;
+  GroupInfoListResponse({this.groupInfos});
+
+  factory GroupInfoListResponse.fromJson(Map<String, dynamic> json) =>
+      GroupInfoListResponse(
+            groupInfos: _asList<GroupInfo>(json['groupInfos'], GroupInfo.fromJson),
+      );
+}
+
+class GroupInfo {
+  final int id;
+  final String name;
+  final bool isAssigned;
+
+  GroupInfo({
+    required this.id,
+    required this.name,
+    required this.isAssigned,
+  });
+
+  GroupInfo copyWith({bool? isAssigned}) {
+    return GroupInfo(
+      id: id,
+      name: name,
+      isAssigned: isAssigned ?? this.isAssigned,
+    );
+  }
+
+  /// Create from API response JSON
+  factory GroupInfo.fromJson(Map<String, dynamic> json, {bool isAssigned = false}) {
+    return GroupInfo(
+      id: json['group_id'] as int? ?? json['id'] as int,
+      name: json['group_name'] as String? ?? json['name'] as String,
+      isAssigned: isAssigned,
+    );
+  }
 }
 
 class NetworkDevicesResponse {

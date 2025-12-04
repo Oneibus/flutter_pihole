@@ -36,6 +36,7 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.2
   http: ^1.5.0
+  shared_preferences: ^2.5.3
 
 dev_dependencies:
   flutter_test:
@@ -94,7 +95,7 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "web/icons/PiHoleIcon-512.png"
+  image_path: "web/icons/PiHoleControl-192-mask.png"
   adaptive_icon_background: "#0175C2"
-  adaptive_icon_foreground: "web/icons/PiHoleIcon-512.png"
-  remove_alpha_ios: true  # Required for App Store submission
+  adaptive_icon_foreground: "web/icons/PiHoleControl-192-mask.png"
+  remove_alpha_ios: false  # Required for App Store submission
