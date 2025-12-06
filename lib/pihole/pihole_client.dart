@@ -131,8 +131,10 @@ class PiHoleClient {
     final res = await _http.delete(uri, headers: _headers);
     checkAndThrow(res);
 
-    final decoded = json.decode(res.body);
+    final decoded = json.decode(res.body.isEmpty ? 
+      '{ "status" : "${res.statusCode == 204 || res.statusCode == 200 ? "success" : "failed ${res.statusCode}" }" }' : res.body);
     if (decoded is Map<String, dynamic>) return decoded;
+
     return {'data': decoded};
   }
 
@@ -235,6 +237,11 @@ class PiHoleClient {
     return StatusResponse.fromJson(jsonMap);
   }
 
+  Future<StatusResponse> deleteCategoryItem({required String category, required String listitem, required Map<String, Object?> props}) async {
+    final jsonMap = await _delete('$category/$listitem');
+    return StatusResponse.fromJson(jsonMap);
+  }
+
   Future<GroupsResponse> getGroups() async {
     final jsonMap = await _get('groups');
     return GroupsResponse.fromJson(jsonMap);
@@ -248,6 +255,29 @@ class PiHoleClient {
   Future<DomainsResponse> getDomains() async {
     final jsonMap = await _get('domains');
     return DomainsResponse.fromJson(jsonMap);
+  }
+
+  // POST /api/domains/{type}/{kind} - Create new domain filter
+  // type: 'allow' or 'deny'
+  // kind: 'exact' or 'regex'
+  // Body: {"domain": "example.com", "comment": "optional", "groups": [0], "enabled": true}
+  Future<Map<String, dynamic>> createDomainFilter({
+    required String type,
+    required String kind,
+    required String domain,
+    String? comment,
+    List<int>? groups,
+    bool enabled = true,
+  }) async {
+    final body = {
+      'domain': domain,
+      if (comment != null && comment.isNotEmpty) 'comment': comment,
+      if (groups != null && groups.isNotEmpty) 'groups': groups,
+      'enabled': enabled,
+    };
+    
+    final jsonMap = await _post('domains/$type/$kind', body: body);
+    return jsonMap;
   }
 
   Future<NetworkResponse> getNetworks() async {

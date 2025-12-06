@@ -25,7 +25,6 @@ class DataService {
     ),
   );
 
-
   // Initialize and cache the DNS blocking status on app startup
   static Future<void> initializeBlockingStatus() async {
     try {
@@ -47,8 +46,12 @@ class DataService {
     return _service.listForCategory(category);
   }
 
-  static Future<bool> updateItem(String category, String itemName,{Map<String, Object?>? props}) {
+  static Future<bool> updateItem(String category, String itemName, {Map<String, Object?>? props}) {
     return _service.updateCategoryItem(category, itemName, props: props);
+  }
+
+  static Future<bool> deleteItem(String category, String itemName, {Map<String, Object?>? props}) {
+    return _service.deleteCategoryItem(category, itemName, props: props);
   }
 
   static Widget buildSystemDialog({required BuildContext context}) {
@@ -69,5 +72,27 @@ class DataService {
 
   static Future<bool> updateClientGroups(int clientId, List<int> groupIds) {
     return _service.updateClientGroups(clientId, groupIds);
+  }
+
+  static Future<List<Group>> getGroups() {
+    return _service.getGroups();
+  }
+
+  static Future<bool> createDomainFilter({
+    required String type,
+    required String kind,
+    required String domain,
+    String? comment,
+    List<int>? groups,
+    bool enabled = true,
+  }) {
+    return _service.createDomainFilter(
+      type: type,
+      kind: kind,
+      domain: domain,
+      comment: comment,
+      groups: groups,
+      enabled: enabled,
+    );
   }
 }

@@ -18,8 +18,8 @@ class PiHoleService {
         return saved;
       case 'domains':
         // hack: handle enable/disable via 'allow' prop
-        props?['type'] = 'deny';
-        props?['kind'] = 'exact';
+        // props?['type'] = 'deny';
+        // props?['kind'] = 'exact';
         props?['domain'] = props['name'];
         props?['status'] = props['enabled'] == true ? 'enabled' : 'disabled';
 
@@ -28,6 +28,18 @@ class PiHoleService {
         final res = await _client.putCategoryItem(category: path, listitem: listitem, props: props ?? {});
         bool saved = res.status == 'success';
         return saved;
+    }
+    return false;
+  }
+
+  Future<bool> deleteCategoryItem(String category, String itemName, {Map<String, Object?>? props}) async {
+    final catName = category.toLowerCase();
+    switch (catName) {
+      case 'domains':
+        String path = '$catName/${props?['type']}/${props?['kind']}';
+        final res = await _client.deleteCategoryItem(category: path, listitem: itemName, props: props ?? {});
+        bool deleted = res.status == 'success';
+        return deleted;
     }
     return false;
   }
@@ -121,9 +133,33 @@ class PiHoleService {
     return await _client.updateClientGroups(clientId, groupIds);
   }
 
-  static Future<bool> updateItem(String category, String name, {Map<String, Object?>? props}) async {
-    // Implementation would be in main.dart
-    throw UnimplementedError();
+  Future<List<Group>> getGroups() async {
+    final response = await _client.getGroups();
+    return response.groups ?? [];
+  }
+
+  Future<bool> createDomainFilter({
+    required String type,
+    required String kind,
+    required String domain,
+    String? comment,
+    List<int>? groups,
+    bool enabled = true,
+  }) async {
+    try {
+      await _client.createDomainFilter(
+        type: type,
+        kind: kind,
+        domain: domain,
+        comment: comment,
+        groups: groups,
+        enabled: enabled,
+      );
+      return true;
+    } catch (e) {
+      print('Error creating domain filter: $e');
+      return false;
+    }
   }
 
   Future<bool> restartDNS() async => _client.restartDNS();

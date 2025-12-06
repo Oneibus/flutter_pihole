@@ -6,6 +6,8 @@ import 'services/system_events.dart';
 import 'services/data_services.dart';
 import 'widgets/edit_item_dialog.dart';
 import 'widgets/edit_client_groups_dialog.dart';
+//import 'widgets/add_domain_filter_dialog.dart';
+//import 'pihole/api_models.dart';
 
 void main() {
   runApp(const MyApp());
@@ -145,12 +147,21 @@ class _MasterDetailPageState extends State<MasterDetailPage> with WidgetsBinding
           // Right panel
           Expanded(
             child: CategoryListView(
-              key: ValueKey('$_selected-$_refreshKey'), // Force rebuild when key changes
+              key: ValueKey('\$_selected-\$_refreshKey'), // Force rebuild when key changes
               category: _selected,
               isRebooting: _isRebooting,
               onItemUpdate: (category, initialName, props) async {
-                await DataService.updateItem(category, initialName, props: props);
+                if (props['delete'] == true) {
+                  await DataService.deleteItem(category, initialName, props: props);
+                } else {
+                  await DataService.updateItem(category, initialName, props: props);
+                }
                 // Trigger refresh after update
+                setState(() {
+                  _refreshKey++;
+                });
+              },
+              onRefresh: () {
                 setState(() {
                   _refreshKey++;
                 });
@@ -311,17 +322,20 @@ class UnusedCategoryListView extends StatelessWidget {
 }
 
 typedef ItemUpdateCallback = Future<void> Function(String category, String name, Map<String, Object?> props);
+typedef RefreshCallback = void Function();
 
 class CategoryListView extends StatefulWidget {
   final String category;
   final bool isRebooting;
   final ItemUpdateCallback? onItemUpdate;
+  final RefreshCallback? onRefresh;
   
   const CategoryListView({
     super.key, 
     required this.category,
     required this.isRebooting,
     this.onItemUpdate,
+    this.onRefresh,
   });
 
   @override
@@ -393,9 +407,11 @@ class _CategoryListViewState extends State<CategoryListView> {
     String? primary = item['primary'];
     String? secondary = item['secondary'];
     String? status = item['status'];
+    String? type = item['type'];
+    String? kind = item['kind'];
 
     return InkWell(
-
+      
       onTap: (mounted && widget.onItemUpdate != null && !widget.isRebooting) ? () async {
         if (widget.category.toLowerCase() == 'clients') {
           // Parse client ID from primary (assuming it's the first part)
@@ -418,19 +434,27 @@ class _CategoryListViewState extends State<CategoryListView> {
         final nameController = TextEditingController(text: primary ?? '');
         final commentController = TextEditingController(text: secondary ?? '');
         String currentStatus = status ?? 'disabled';
+        String currentType = type ?? 'unknown';
+        String currentKind = kind ?? 'unknown';
 
         await DynamicItemEditDialog.show(
           context, 
           Icons.edit, 
           widget.category, 
+
           editItemDialogContent(
+            context,
+            widget.category,
             nameController,
             commentController,
             currentStatus,
             (String value) => primary = value,
             (String value) => secondary = value,
-            (String? value) => currentStatus = value ?? currentStatus
+            (String? value) => currentStatus = value ?? currentStatus,
+            (String? value) => currentType = value ?? currentType,
+            (String? value) => currentKind = value ?? currentKind,
           ), 
+
           () async {
             // Save callback
             if (mounted && widget.onItemUpdate != null) {
@@ -442,6 +466,9 @@ class _CategoryListViewState extends State<CategoryListView> {
                   'name': nameController.text,
                   'comment': commentController.text.isEmpty ? null : commentController.text,
                   'enabled': currentStatus == 'enabled',
+                  'delete': currentStatus == 'delete',
+                  'type': currentType,
+                  'kind': currentKind,
                 },
               );
               if (mounted) {
@@ -451,7 +478,8 @@ class _CategoryListViewState extends State<CategoryListView> {
             // Dispose controllers after save
             nameController.dispose();
             commentController.dispose();
-          },  
+          },
+
           () {
             // Cancel callback
             if (mounted) {
@@ -594,10 +622,20 @@ class _CategoryListViewState extends State<CategoryListView> {
                 _buildHeaderRow(context),
                 // Data rows
                 Expanded(
-                  child: ListView.builder(
-                    itemCount: items.length,
-                    itemBuilder: (context, index) =>
-                        _buildItemRow(context, items[index], index),
+                  child: RefreshIndicator(
+                    onRefresh: () async {
+                      // Call parent's refresh callback to increment _refreshKey
+                      if (widget.onRefresh != null) {
+                        widget.onRefresh!();
+                      }
+                      // Small delay for the refresh animation
+                      await Future.delayed(const Duration(milliseconds: 300));
+                    },
+                    child: ListView.builder(
+                      itemCount: items.length,
+                      itemBuilder: (context, index) =>
+                          _buildItemRow(context, items[index], index),
+                    ),
                   ),
                 ),
               ],
