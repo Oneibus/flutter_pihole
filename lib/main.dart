@@ -4,12 +4,13 @@ import 'package:flutter/material.dart';
 
 import 'services/system_events.dart';
 import 'services/data_services.dart';
+import 'services/service_locator.dart';
 import 'widgets/edit_item_dialog.dart';
 import 'widgets/edit_client_groups_dialog.dart';
-//import 'widgets/add_domain_filter_dialog.dart';
-//import 'pihole/api_models.dart';
 
 void main() {
+  // Setup dependency injection before running app
+  setupServiceLocator();
   runApp(const MyApp());
 }
 
@@ -60,7 +61,7 @@ class _MasterDetailPageState extends State<MasterDetailPage> with WidgetsBinding
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    DataService.systemEvents.dispose();
+    dataService.systemEvents.dispose();
     super.dispose();
   }
 
@@ -70,7 +71,7 @@ class _MasterDetailPageState extends State<MasterDetailPage> with WidgetsBinding
       // The engine is shutting down (User swiped away the app or OS killed it)
       // Note: Network calls here are "best effort" and may not always complete
       // on mobile OSs due to strict background limits, but it helps.
-      DataService.logout();
+      dataService.logout();
     }
   }
 
@@ -152,9 +153,9 @@ class _MasterDetailPageState extends State<MasterDetailPage> with WidgetsBinding
               isRebooting: _isRebooting,
               onItemUpdate: (category, initialName, props) async {
                 if (props['delete'] == true) {
-                  await DataService.deleteItem(category, initialName, props: props);
+                  await dataService.deleteItem(category, initialName, props: props);
                 } else {
-                  await DataService.updateItem(category, initialName, props: props);
+                  await dataService.updateItem(category, initialName, props: props);
                 }
                 // Trigger refresh after update
                 setState(() {
@@ -184,10 +185,10 @@ class _MasterDetailPageState extends State<MasterDetailPage> with WidgetsBinding
 
   // Setup listeners for system events and show SnackBars accordingly
   Future<void> _setupEventListeners() async {
-    await DataService.initializeBlockingStatus();
+    await dataService.initializeBlockingStatus();
     // Listen to reboot events
 
-    _rebootSubscription = DataService.systemEvents.rebootStream.listen((event) {
+    _rebootSubscription = dataService.systemEvents.rebootStream.listen((event) {
       if (!mounted) return;
 
       String message;
@@ -243,7 +244,7 @@ class _MasterDetailPageState extends State<MasterDetailPage> with WidgetsBinding
     });
 
     // Listen to service readiness events
-    _serviceSubscription = DataService.systemEvents.serviceStream.listen((event) {
+    _serviceSubscription = dataService.systemEvents.serviceStream.listen((event) {
       if (!mounted) return;
 
       String message;
@@ -291,7 +292,7 @@ class UnusedCategoryListView extends StatelessWidget {
   Widget build(BuildContext context) {
 
     final futureBuilder = FutureBuilder<List<dynamic>>(key: ValueKey(category), // reset when category changes
-                                       future: DataService.fetchItems(category),
+                                       future: dataService.fetchItems(category),
                                        builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const Center(child: CircularProgressIndicator());
@@ -415,7 +416,7 @@ class _CategoryListViewState extends State<CategoryListView> {
       onTap: (mounted && widget.onItemUpdate != null && !widget.isRebooting) ? () async {
         if (widget.category.toLowerCase() == 'clients') {
           // Parse client ID from primary (assuming it's the first part)
-          final groups = await DataService.getGroupsForClient(id);
+          final groups = await dataService.getGroupsForClient(id);
 
           await EditClientGroupsDialog.show(
             context: context,
@@ -424,7 +425,7 @@ class _CategoryListViewState extends State<CategoryListView> {
             clientName: primary ?? '',
             availableGroups: groups,
             onUpdate: (clientId, groupIds) async {
-              await DataService.updateClientGroups(clientId, groupIds);
+              await dataService.updateClientGroups(clientId, groupIds);
             },
           );
           return;
@@ -594,7 +595,7 @@ class _CategoryListViewState extends State<CategoryListView> {
       children: [
         FutureBuilder<List<dynamic>>(
           key: ValueKey(widget.category), // reset when category changes
-          future: DataService.fetchItems(widget.category),
+          future: dataService.fetchItems(widget.category),
           builder: (context, snapshot) {
             while (snapshot.connectionState != ConnectionState.done) {
               return const Center(child: CircularProgressIndicator());
@@ -610,7 +611,7 @@ class _CategoryListViewState extends State<CategoryListView> {
 
             final items = snapshot.data ?? const <String>[];
             if (widget.category == 'System') {
-              return DataService.buildSystemDialog(context: context);  
+              return dataService.buildSystemDialog(context: context);  
             } else if (items.isEmpty) {
               return Center(child: Text('No ${widget.category} found.'));
             }

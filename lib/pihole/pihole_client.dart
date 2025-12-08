@@ -446,7 +446,9 @@ class PiHoleClient {
     }
   }
 
-  Future<bool> restartDNS() async => executeSSHCommand('systemctl restart pihole-FTL');
+  Future<bool> restartDNS() async {
+    return await executeSSHCommand('systemctl restart pihole-FTL');
+  }
 
   Future<bool> flushNetworkCache() async {
     bool sts = await executeSSHCommand('pihole networkflush --arp')

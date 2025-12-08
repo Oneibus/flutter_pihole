@@ -1,36 +1,43 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:get_it/get_it.dart';
 
 import 'settings_service.dart';
 import 'system_events.dart';
 import '../pihole/api_models.dart';
-import '../pihole/pihole_client.dart';
 import '../pihole/pihole_service.dart';
 import '../widgets/system_dialog.dart';
 
+/// Data service layer that provides business logic and coordinates between UI and services
+/// This is now a non-static class that uses GetIt for dependency injection
 class DataService {
-  // System event and settings service instances
-  static final SystemEventService systemEvents = SystemEventService();
-  static final SettingsService settingsService = SettingsService();
+  final PiHoleService _piHoleService;
+  final SettingsService _settingsService;
+  final SystemEventService _systemEventService;
 
-  Future<String> get hostName => settingsService.getHostname();
-  Future<String> get appPassword => settingsService.getAppPassword();
-  Future<String> get sysAccount => settingsService.getSysAccount();
-  Future<String> get sysPassword => settingsService.getSysPassword();
+  DataService({
+    required PiHoleService piHoleService,
+    required SettingsService settingsService,
+    required SystemEventService systemEventService,
+  })  : _piHoleService = piHoleService,
+        _settingsService = settingsService,
+        _systemEventService = systemEventService;
 
-  static final _service = PiHoleService(
-    PiHoleClient(
-      settingsService: SettingsService(),
-      systemEventService: systemEvents,
-    ),
-  );
+  // Convenience getters for accessing injected services
+  SystemEventService get systemEvents => _systemEventService;
+  SettingsService get settingsService => _settingsService;
+
+  Future<String> get hostName => _settingsService.getHostname();
+  Future<String> get appPassword => _settingsService.getAppPassword();
+  Future<String> get sysAccount => _settingsService.getSysAccount();
+  Future<String> get sysPassword => _settingsService.getSysPassword();
 
   // Initialize and cache the DNS blocking status on app startup
-  static Future<void> initializeBlockingStatus() async {
+  Future<void> initializeBlockingStatus() async {
     try {
       // Query the blocking status to initialize/cache it
-      if (await _service.isConfigured()) {
-        await _service.isBlockingEnabled();
+      if (await _piHoleService.isConfigured()) {
+        await _piHoleService.isBlockingEnabled();
       }
     } catch (e) {
       debugPrint('Error initializing blocking status: $e');
@@ -38,47 +45,47 @@ class DataService {
     }
   }
 
-  static Future<void> logout() async {
-    await _service.logout();
+  Future<void> logout() async {
+    await _piHoleService.logout();
   }
 
-  static Future<List<dynamic>> fetchItems(String category) {
-    return _service.listForCategory(category);
+  Future<List<dynamic>> fetchItems(String category) {
+    return _piHoleService.listForCategory(category);
   }
 
-  static Future<bool> updateItem(String category, String itemName, {Map<String, Object?>? props}) {
-    return _service.updateCategoryItem(category, itemName, props: props);
+  Future<bool> updateItem(String category, String itemName, {Map<String, Object?>? props}) {
+    return _piHoleService.updateCategoryItem(category, itemName, props: props);
   }
 
-  static Future<bool> deleteItem(String category, String itemName, {Map<String, Object?>? props}) {
-    return _service.deleteCategoryItem(category, itemName, props: props);
+  Future<bool> deleteItem(String category, String itemName, {Map<String, Object?>? props}) {
+    return _piHoleService.deleteCategoryItem(category, itemName, props: props);
   }
 
-  static Widget buildSystemDialog({required BuildContext context}) {
+  Widget buildSystemDialog({required BuildContext context}) {
     return SystemDialog(
-      onFlushNetworkCache: _service.flushNetworkCache,
-      onRestartDNS: _service.restartDNS,
-      onRebootSystem: _service.rebootSystem,
-      onEnableBlocking: ({int? duration}) => _service.enableBlocking(),
-      onDisableBlocking: ({int? duration}) => _service.disableBlocking(duration: duration),
-      onGetBlockingStatus: _service.isBlockingEnabled,
-      onApplicationSettings: _service.resetService,
+      onFlushNetworkCache: _piHoleService.flushNetworkCache,
+      onRestartDNS: _piHoleService.restartDNS,
+      onRebootSystem: _piHoleService.rebootSystem,
+      onEnableBlocking: ({int? duration}) => _piHoleService.enableBlocking(),
+      onDisableBlocking: ({int? duration}) => _piHoleService.disableBlocking(duration: duration),
+      onGetBlockingStatus: _piHoleService.isBlockingEnabled,
+      onApplicationSettings: _piHoleService.resetService,
     );
   }
 
-  static Future<List<GroupInfo>> getGroupsForClient(int clientId) {
-    return _service.getGroupsForClient(clientId);
+  Future<List<GroupInfo>> getGroupsForClient(int clientId) {
+    return _piHoleService.getGroupsForClient(clientId);
   }
 
-  static Future<bool> updateClientGroups(int clientId, List<int> groupIds) {
-    return _service.updateClientGroups(clientId, groupIds);
+  Future<bool> updateClientGroups(int clientId, List<int> groupIds) {
+    return _piHoleService.updateClientGroups(clientId, groupIds);
   }
 
-  static Future<List<Group>> getGroups() {
-    return _service.getGroups();
+  Future<List<Group>> getGroups() {
+    return _piHoleService.getGroups();
   }
 
-  static Future<bool> createDomainFilter({
+  Future<bool> createDomainFilter({
     required String type,
     required String kind,
     required String domain,
@@ -86,7 +93,7 @@ class DataService {
     List<int>? groups,
     bool enabled = true,
   }) {
-    return _service.createDomainFilter(
+    return _piHoleService.createDomainFilter(
       type: type,
       kind: kind,
       domain: domain,
@@ -96,3 +103,6 @@ class DataService {
     );
   }
 }
+
+/// Convenience function to get DataService from GetIt
+DataService get dataService => GetIt.instance<DataService>();

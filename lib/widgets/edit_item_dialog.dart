@@ -169,7 +169,7 @@ Widget editItemDialogContent(
                 if (domain == null || domain.isEmpty) return;
 
                 try {
-                  final groups = await DataService.getGroups();
+                  final groups = await dataService.getGroups();
                   await AddDomainFilterDialog.show(
                     context: parentContext,
                     domain: domain,
@@ -182,7 +182,7 @@ Widget editItemDialogContent(
                       groups,
                       enabled = true,
                     }) async {
-                      await DataService.createDomainFilter(
+                      await dataService.createDomainFilter(
                         type: type,
                         kind: kind,
                         domain: domain,
