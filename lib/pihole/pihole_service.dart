@@ -57,6 +57,7 @@ class PiHoleService {
               'name': g.name,
               'description': g.description,
               'enabled': g.enabled,
+              'redline': (g.enabled == false),
             }).toList() ?? [];
 
       case 'clients':
@@ -83,7 +84,7 @@ class PiHoleService {
               'type': d.type,
               'kind': d.kind,
               'comment': d.comment,
-              'enabled': d.enabled,
+              'redline': d.enabled == false,
             }).toList()) ?? [];
 
       case 'network':
@@ -117,6 +118,7 @@ class PiHoleService {
               'client': q.client.name ?? '',
               'domain': q.domain,
               'timestamp': q.time,
+              'redline': (q.status.toLowerCase().contains('deny')),
             }).toList()) ?? [];
 
      case 'system':

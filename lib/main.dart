@@ -1,6 +1,7 @@
 // import 'dart:io' show Platform;
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_pihole_client/services/settings_service.dart';
 
 import 'services/system_events.dart';
 import 'services/data_services.dart';
@@ -34,6 +35,8 @@ class MasterDetailPage extends StatefulWidget {
 
 class _MasterDetailPageState extends State<MasterDetailPage> with WidgetsBindingObserver {
 
+  SettingsService get settingsService => getIt<SettingsService>();
+
   static const categories = <String>[
     'Groups',
     'Clients',
@@ -43,7 +46,7 @@ class _MasterDetailPageState extends State<MasterDetailPage> with WidgetsBinding
     'System',
   ];
 
-  static String _selected = categories.first;
+  static String _selectedCategory = categories.first;
   int _refreshKey = 0; // Key to force refresh
   bool _isRebooting = false; // Track reboot state
   String? _piholeHost = '';
@@ -78,6 +81,13 @@ class _MasterDetailPageState extends State<MasterDetailPage> with WidgetsBinding
   // Initialize application and load initial DNS blocking status
   Future<void> _initializeApp() async {
     try {
+      // Load hostname from settings
+      final hostname = await dataService.hostName;
+      if (mounted) {
+        setState(() {
+          _piholeHost = hostname;
+        });
+      }
       await _setupEventListeners();
     } catch (e) {
       // Silently handle initialization errors
@@ -108,35 +118,43 @@ class _MasterDetailPageState extends State<MasterDetailPage> with WidgetsBinding
           Container(
             width: 100,
             color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            child: ListView.separated(
+
+            child: ListView.builder(
+              padding: const EdgeInsets.only(top: 8.0, bottom: 4.0, left: 8.0, right: 0.0),
               itemCount: categories.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (ctx, i) {
                 final name = categories[i];
-                final selected = _selected == name;
+                final selected = _selectedCategory == name;
+
                 // Use InkWell + Container instead of ListTile for narrow columns
-                return InkWell(
-                  onTap: _isRebooting ? null : () {
-                    setState(() {
-                      _selected = name;
-                    });
-                  },
-                  child: Container(
-                    height: 48, // Fixed comfortable height
-                    alignment: Alignment.centerLeft, // Ensure text starts at left
-                    padding: const EdgeInsets.symmetric(horizontal: 12.0), // Manual padding
-                    color: selected ? Colors.green[200] : null, // Selection background
-                    child: Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: selected ? 14 : 12,
-                        // Use onSurface so it adapts to Dark/Light mode automatically
-                        color: selected
-                            ? Colors.green[900]
-                            : Theme.of(context).colorScheme.onSurface,
-                        fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 4.0),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: InkWell(
+                      onTap: _isRebooting ? null : () {
+                        setState(() {
+                          _selectedCategory = name;
+                        });
+                      },
+                      child: Container(
+                        height: 48, // Fixed comfortable height
+                        alignment: Alignment.centerLeft, // Ensure text starts at left
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0), // Manual padding
+                        color: selected ? Colors.green[200] : Theme.of(context).colorScheme.surface, // Selection background
+                        child: Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: selected ? 14 : 12,
+                            // Use onSurface so it adapts to Dark/Light mode automatically
+                            color: selected
+                                ? Colors.green[900]
+                                : Theme.of(context).colorScheme.onSurface,
+                            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -145,28 +163,37 @@ class _MasterDetailPageState extends State<MasterDetailPage> with WidgetsBinding
             ),
           ),
           const VerticalDivider(width: 2),
-          // Right panel
+          // Right panel with rounded corners and matching background
           Expanded(
-            child: CategoryListView(
-              key: ValueKey('\$_selected-\$_refreshKey'), // Force rebuild when key changes
-              category: _selected,
-              isRebooting: _isRebooting,
-              onItemUpdate: (category, initialName, props) async {
-                if (props['delete'] == true) {
-                  await dataService.deleteItem(category, initialName, props: props);
-                } else {
-                  await dataService.updateItem(category, initialName, props: props);
-                }
-                // Trigger refresh after update
-                setState(() {
-                  _refreshKey++;
-                });
-              },
-              onRefresh: () {
-                setState(() {
-                  _refreshKey++;
-                });
-              },
+            child: Container(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: CategoryListView(
+                    key: ValueKey('$_selectedCategory-$_refreshKey'), // Force rebuild when key changes
+                    category: _selectedCategory,
+                    isRebooting: _isRebooting,
+                    onItemUpdate: (category, initialName, props) async {
+                      if (props['delete'] == true) {
+                        await dataService.deleteItem(category, initialName, props: props);
+                      } else {
+                        await dataService.updateItem(category, initialName, props: props);
+                      }
+                      // Trigger refresh after update
+                      setState(() {
+                        _refreshKey++;
+                      });
+                    },
+                    onRefresh: () {
+                      setState(() {
+                        _refreshKey++;
+                      });
+                    },
+                  ),
+                ),
+              ),
             ),
           ),
         ],
@@ -176,7 +203,10 @@ class _MasterDetailPageState extends State<MasterDetailPage> with WidgetsBinding
         child: Padding(
           padding: const EdgeInsets.all(2.0),
           child: NavigationToolbar(
-            middle: Text(_isRebooting ? 'Connection pending...' : 'Connected to: $_piholeHost'),
+            middle: Text(
+              _isRebooting ? 'Connection pending...' : 'Connected to: ${_piholeHost ?? 'Unknown'}',
+              style: const TextStyle(fontSize: 12),
+            ),
           ),
         ),
       ),
@@ -280,47 +310,45 @@ class _MasterDetailPageState extends State<MasterDetailPage> with WidgetsBinding
       );
     });
   }
-
-
 }
 
-class UnusedCategoryListView extends StatelessWidget {
-  final String category;
-  const UnusedCategoryListView({super.key, required this.category});
+// class UnusedCategoryListView extends StatelessWidget {
+//   final String category;
+//   const UnusedCategoryListView({super.key, required this.category});
 
-  @override
-  Widget build(BuildContext context) {
+//   @override
+//   Widget build(BuildContext context) {
 
-    final futureBuilder = FutureBuilder<List<dynamic>>(key: ValueKey(category), // reset when category changes
-                                       future: dataService.fetchItems(category),
-                                       builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
-        }
+//     final futureBuilder = FutureBuilder<List<dynamic>>(key: ValueKey(category), // reset when category changes
+//                                        future: dataService.fetchItems(category),
+//                                        builder: (context, snapshot) {
+//         if (snapshot.connectionState != ConnectionState.done) {
+//           return const Center(child: CircularProgressIndicator());
+//         }
 
-        if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
-        }
+//         if (snapshot.hasError) {
+//           return Center(child: Text('Error: ${snapshot.error}'));
+//         }
 
-        final items = snapshot.data ?? const <String>[];
-        if (items.isEmpty) {
-          return Center(child: Text('No $category found.'));
-        }
+//         final items = snapshot.data ?? const <String>[];
+//         if (items.isEmpty) {
+//           return Center(child: Text('No $category found.'));
+//         }
 
-        return ListView.separated(itemCount: items.length, separatorBuilder: (_, __) => const Divider(height: 1), itemBuilder: (context, index) {
-            final item = items[index];
-            return ListTile(title: Text(item, style: const TextStyle(fontSize: 10)), 
-              onTap: () {
-              // Optional: handle item tap
-              });
-          },
-        );
-      },
-    );
+//         return ListView.separated(itemCount: items.length, separatorBuilder: (_, __) => const Divider(height: 1), itemBuilder: (context, index) {
+//             final item = items[index];
+//             return ListTile(title: Text(item, style: const TextStyle(fontSize: 10)), 
+//               onTap: () {
+//               // Optional: handle item tap
+//               });
+//           },
+//         );
+//       },
+//     );
 
-    return futureBuilder;
-  }
-}
+//     return futureBuilder;
+//   }
+// }
 
 typedef ItemUpdateCallback = Future<void> Function(String category, String name, Map<String, Object?> props);
 typedef RefreshCallback = void Function();
@@ -410,9 +438,9 @@ class _CategoryListViewState extends State<CategoryListView> {
     String? status = item['status'];
     String? type = item['type'];
     String? kind = item['kind'];
+    bool redlined = item['redline'] == true;
 
     return InkWell(
-      
       onTap: (mounted && widget.onItemUpdate != null && !widget.isRebooting) ? () async {
         if (widget.category.toLowerCase() == 'clients') {
           // Parse client ID from primary (assuming it's the first part)
@@ -496,7 +524,9 @@ class _CategoryListViewState extends State<CategoryListView> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
         decoration: BoxDecoration(
-          color: index.isEven ? Colors.lightGreen[50] : Colors.white,
+          color: (redlined == true) ?
+                    Colors.red[100] :  
+                    (index.isEven ? Colors.lightGreen[50] : Colors.white),
           border: Border(
             bottom: BorderSide(color: Colors.grey[300]!, width: 0.5),
           ),
@@ -562,17 +592,11 @@ class _CategoryListViewState extends State<CategoryListView> {
                   padding: const EdgeInsets.only(left: 0),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: status.contains('disabled')
-                          ? Colors.red[110] 
-                          : Colors.green[110],
-                      borderRadius: BorderRadius.circular(8),
-                    ),
                     child: Text(
                       status,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: status.contains('disabled')
-                            ? Colors.red[800] 
+                            ? Colors.red[900] 
                             : Colors.green[800],
                         fontSize: 10,
                         fontWeight: FontWeight.w400,
@@ -623,19 +647,22 @@ class _CategoryListViewState extends State<CategoryListView> {
                 _buildHeaderRow(context),
                 // Data rows
                 Expanded(
-                  child: RefreshIndicator(
-                    onRefresh: () async {
-                      // Call parent's refresh callback to increment _refreshKey
-                      if (widget.onRefresh != null) {
-                        widget.onRefresh!();
-                      }
-                      // Small delay for the refresh animation
-                      await Future.delayed(const Duration(milliseconds: 300));
-                    },
-                    child: ListView.builder(
-                      itemCount: items.length,
-                      itemBuilder: (context, index) =>
-                          _buildItemRow(context, items[index], index),
+                  child: Container(
+                    color: Colors.white, // Background color for the list area
+                    child: RefreshIndicator(
+                      onRefresh: () async {
+                        // Call parent's refresh callback to increment _refreshKey
+                        if (widget.onRefresh != null) {
+                          widget.onRefresh!();
+                        }
+                        // Small delay for the refresh animation
+                        await Future.delayed(const Duration(milliseconds: 300));
+                      },
+                      child: ListView.builder(
+                        itemCount: items.length,
+                        itemBuilder: (context, index) =>
+                            _buildItemRow(context, items[index], index),
+                      ),
                     ),
                   ),
                 ),

@@ -102,7 +102,7 @@ class SystemEventService {
       try {
         final isHealthy = await healthCheck();
         if (isHealthy) {
-          emitServiceEvent(ServiceState.ready, message: 'Service is ready' );
+          emitServiceEvent(ServiceState.ready, message: 'Service is ready');
           emitRebootEvent(RebootState.complete, message: 'Reboot completed successfully');
           return;
         }
