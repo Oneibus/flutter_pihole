@@ -177,7 +177,7 @@ Widget editItemDialogContent(
                     onCreate: ({
                       required type,
                       required kind,
-                      required domain,
+                      required domainFilter,
                       comment,
                       groups,
                       enabled = true,
@@ -185,7 +185,7 @@ Widget editItemDialogContent(
                       await dataService.createDomainFilter(
                         type: type,
                         kind: kind,
-                        domain: domain,
+                        domain: domainFilter,
                         comment: comment,
                         groups: groups,
                         enabled: enabled,

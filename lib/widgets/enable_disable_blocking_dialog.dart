@@ -25,7 +25,7 @@ class EnableDisableBlockingDialog {
           return DialogBuilder()
               .setTitle(isCurrentlyEnabled ? 'Disable Blocking' : 'Enable Blocking')
               .setWidth(450)
-              .setHeight(isCurrentlyEnabled ? (useDuration ? 340 : 220) : 150)
+              .setHeight(isCurrentlyEnabled ? (useDuration ? 240 : 160) : 150)
               .setContent(
                 Expanded(
                   child: SingleChildScrollView(

@@ -216,100 +216,97 @@ class _SystemDialogState extends State<SystemDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return SimpleDialog(
-      backgroundColor: Colors.grey[50],
-      titlePadding: const EdgeInsets.all(8.0),
-
-      titleTextStyle: TextStyle(
-        color: Colors.blue[800],
-        fontSize: 18,
-        fontWeight: FontWeight.bold,
-      ),
-
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8.0),
-      ),
-
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Toggle Enable/Disable Blocking Button
-              ElevatedButton.icon(
-                onPressed: _handleAppSettings,
-                icon: const Icon(Icons.settings),
-                label: Text('App Settings'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.deepPurple[500],
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      color: Colors.grey[50],
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 300,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // App Settings Button
+                ElevatedButton.icon(
+                  onPressed: _isProcessing ? null : _handleAppSettings,
+                  icon: const Icon(Icons.settings),
+                  label: const Text('App Settings'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepPurple[500],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-
-              // Toggle Enable/Disable Blocking Button
-              ElevatedButton.icon(
-                onPressed: _isProcessing ? null : _handleToggleBlocking,
-                icon: Icon(_blockingEnabled ? Icons.block : Icons.check_circle),
-                label: Text(_blockingEnabled ? 'Disable Blocking' : 'Enable Blocking'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _blockingEnabled ? Colors.orange[700] : Colors.green[700],
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
-              const SizedBox(height: 12),
-              
-              // Restart DNS Button
-              ElevatedButton.icon(
-                onPressed: _isProcessing ? null : _handleRestartDNS,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Restart DNS'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
-              const SizedBox(height: 12),
-              
-              // Flush Network Table Button
-              ElevatedButton.icon(
-                onPressed: _isProcessing ? null : _handleFlushNetworkCache,
-                icon: const Icon(Icons.network_check),
-                label: const Text('Flush Network'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
-              const SizedBox(height: 12),
-              
-              // Reboot System Button
-              ElevatedButton.icon(
-                onPressed: _isProcessing ? null : _handleRebootSystem,
-                icon: const Icon(Icons.power_settings_new),
-                label: const Text('Reboot System'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
-              
-              if (_isProcessing) ...[
                 const SizedBox(height: 16),
-                const Center(
-                  child: CircularProgressIndicator(),
+
+                // Toggle Enable/Disable Blocking Button
+                ElevatedButton.icon(
+                  onPressed: _isProcessing ? null : _handleToggleBlocking,
+                  icon: Icon(_blockingEnabled ? Icons.block : Icons.check_circle),
+                  label: Text(_blockingEnabled ? 'Disable Blocking' : 'Enable Blocking'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _blockingEnabled ? Colors.orange[700] : Colors.green[700],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                
+                // Restart DNS Button
+                ElevatedButton.icon(
+                  onPressed: _isProcessing ? null : _handleRestartDNS,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Restart DNS'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                
+                // Flush Network Table Button
+                ElevatedButton.icon(
+                  onPressed: _isProcessing ? null : _handleFlushNetworkCache,
+                  icon: const Icon(Icons.network_check),
+                  label: const Text('Flush Network'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                
+                // Reboot System Button
+                ElevatedButton.icon(
+                  onPressed: _isProcessing ? null : _handleRebootSystem,
+                  icon: const Icon(Icons.power_settings_new),
+                  label: const Text('Reboot System'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
                 ),
               ],
-            ],
+            ),
           ),
-        ),
-      ],
+          
+          if (_isProcessing) ...[
+            const SizedBox(height: 24),
+            const Center(
+              child: CircularProgressIndicator(),
+            ),
+          ],
+          
+          // Spacer to push content to top
+          const Spacer(),
+        ],
+      ),
     );
   }
 }

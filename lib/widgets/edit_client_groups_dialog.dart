@@ -147,7 +147,6 @@ Widget editClientGroupsDialogContent({
                   return CheckboxListTile.adaptive(
                     dense: true,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 0.0),
-                    // visualDensity: const VisualDensity(horizontal: 0, vertical: -2),
                     visualDensity: VisualDensity.compact,
                     checkboxShape: CircleBorder(side: BorderSide(color: Colors.green[700]!, width: 1)),
                     title: Text(

@@ -6,7 +6,7 @@ import 'common_dialog.dart';
 typedef CreateDomainFilterCallback = Future<void> Function({
   required String type,
   required String kind,
-  required String domain,
+  required String domainFilter,
   String? comment,
   List<int>? groups,
   bool enabled,
@@ -21,18 +21,22 @@ class AddDomainFilterDialog {
     required List<Group> availableGroups,
     required CreateDomainFilterCallback onCreate,
   }) {
+    String domainFilter = domain;
     String filterType = 'deny'; // allow or deny
     String filterKind = 'exact'; // exact or regex
     String? comment;
     List<int> selectedGroups = [0]; // Default group
     bool enabled = true;
     bool isLoading = false;
+    
+    // Create controllers once outside builder
+    final domainFilterController = TextEditingController(text: domainFilter);
+    final commentController = TextEditingController(text: comment);
 
     return showDialog<void>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setState) {
-          final commentController = TextEditingController(text: comment);
 
           Future<void> handleSave() async {
             setState(() {
@@ -43,7 +47,7 @@ class AddDomainFilterDialog {
               await onCreate(
                 type: filterType,
                 kind: filterKind,
-                domain: domain,
+                domainFilter: domainFilterController.text.isEmpty ? domainFilter : domainFilterController.text,
                 comment: commentController.text.isEmpty ? null : commentController.text,
                 groups: selectedGroups,
                 enabled: enabled,
@@ -78,43 +82,47 @@ class AddDomainFilterDialog {
               .setSubtitle(Text('Domain: $domain'))
               .setTitleIcon(Icons.filter_alt)
               .setWidth(400)
-              .setMaxHeight(500)
+              .setMaxHeight(460)
               .setContent(
-                Expanded(
-                  child: addDomainFilterDialogContent(
-                    domain: domain,
-                    filterType: filterType,
-                    filterKind: filterKind,
-                    commentController: commentController,
-                    availableGroups: availableGroups,
-                    selectedGroups: selectedGroups,
-                    enabled: enabled,
-                    isLoading: isLoading,
-                    onFilterTypeChanged: (value) {
-                      setState(() {
-                        filterType = value;
-                      });
-                    },
-                    onFilterKindChanged: (value) {
-                      setState(() {
-                        filterKind = value;
-                      });
-                    },
-                    onEnabledChanged: (value) {
-                      setState(() {
-                        enabled = value ?? true;
-                      });
-                    },
-                    onGroupToggled: (groupId) {
-                      setState(() {
-                        if (selectedGroups.contains(groupId)) {
-                          selectedGroups.remove(groupId);
-                        } else {
-                          selectedGroups.add(groupId);
-                        }
-                      });
-                    },
-                  ),
+                addDomainFilterDialogContent(
+                  domainFilter: domainFilter,
+                  domainController: domainFilterController,
+                  filterType: filterType,
+                  filterKind: filterKind,
+                  commentController: commentController,
+                  availableGroups: availableGroups,
+                  selectedGroups: selectedGroups,
+                  enabled: enabled,
+                  isLoading: isLoading,
+                  onFilterTypeChanged: (value) {
+                    setState(() {
+                      filterType = value;
+                    });
+                  },
+                  onFilterKindChanged: (value) {
+                    setState(() {
+                      filterKind = value;
+                    });
+                  },
+                  onEnabledChanged: (value) {
+                    setState(() {
+                      enabled = value ?? true;
+                    });
+                  },
+                  onGroupToggled: (groupId) {
+                    setState(() {
+                      if (selectedGroups.contains(groupId)) {
+                        selectedGroups.remove(groupId);
+                      } else {
+                        selectedGroups.add(groupId);
+                      }
+                    });
+                  }, 
+                  onDomainChanged: (String value) {
+                    setState(() {
+                      domainFilter = value;
+                    });
+                  },
                 ),
               )
               .setActions([
@@ -151,7 +159,7 @@ class AddDomainFilterDialog {
 }
 
 Widget addDomainFilterDialogContent({
-  required String domain,
+  required String domainFilter,
   required String filterType,
   required String filterKind,
   required TextEditingController commentController,
@@ -159,150 +167,198 @@ Widget addDomainFilterDialogContent({
   required List<int> selectedGroups,
   required bool enabled,
   required bool isLoading,
+  required TextEditingController domainController,
+  required Function(String) onDomainChanged,
   required Function(String) onFilterTypeChanged,
   required Function(String) onFilterKindChanged,
   required Function(bool?) onEnabledChanged,
   required Function(int) onGroupToggled,
 }) {
+
+  final TextStyle _textStyle = const TextStyle(color: Colors.black, fontSize: 12, fontWeight: FontWeight.w400);
+  final TextStyle _scaleDropTextStyle = const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.w400);
+  final Color _cursorColor = Colors.green[800]!;
+  final Color _bkgndCursorColor = Colors.grey;
+  final BoxDecoration _boxDecoration = BoxDecoration(
+    border: Border.all(color: Colors.green[800]!, width: 1, strokeAlign: BorderSide.strokeAlignCenter),
+    borderRadius: BorderRadius.circular(8),
+  );
+
   return SingleChildScrollView(
     padding: const EdgeInsets.all(12.0),
     child: Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Filter Type (Allow/Deny)
-        const Text(
-          'Filter Type:',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
         Row(
           children: [
+            const SizedBox(
+              width: 100,
+              child: Text(
+                'Domain Filter:',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+            ),
+            Expanded(
+              child: TextField(
+                controller: domainController,
+                style: _textStyle,
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.green[800]!, width: 1),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.green[800]!, width: 1),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: Colors.green[800]!, width: 2),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  isDense: true,
+                ),
+                onChanged: (value) {
+                  onDomainChanged(value);
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+
+        // Filter Type (Allow/Deny)
+        Row(
+          children: [
+            const SizedBox(
+              width: 100,
+              child: Text(
+                'Filter Type:',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+            ),
             Expanded(
               child: RadioListTile<String>(
-                title: const Text('Allow', style: TextStyle(fontSize: 13)),
-                subtitle: const Text('Permit this domain', style: TextStyle(fontSize: 11)),
+                title: const Text('Allow', style: TextStyle(fontSize: 12)),
                 value: 'allow',
                 groupValue: filterType,
                 onChanged: isLoading ? null : (value) => onFilterTypeChanged(value!),
                 dense: true,
                 contentPadding: EdgeInsets.zero,
-                visualDensity: VisualDensity.compact,
+                visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
               ),
             ),
             Expanded(
               child: RadioListTile<String>(
-                title: const Text('Deny', style: TextStyle(fontSize: 13)),
-                subtitle: const Text('Block this domain', style: TextStyle(fontSize: 11)),
+                title: const Text('Deny', style: TextStyle(fontSize: 12)),
                 value: 'deny',
                 groupValue: filterType,
                 onChanged: isLoading ? null : (value) => onFilterTypeChanged(value!),
                 dense: true,
                 contentPadding: EdgeInsets.zero,
-                visualDensity: VisualDensity.compact,
+                visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
               ),
             ),
           ],
         ),
 
-        const Divider(),
+        const SizedBox(height: 2),
 
         // Filter Kind (Exact/Regex)
-        const Text(
-          'Match Type:',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
         Row(
           children: [
+            const SizedBox(
+              width: 100,
+              child: Text(
+                'Match Type:',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+            ),
             Expanded(
               child: RadioListTile<String>(
-                title: const Text('Exact', style: TextStyle(fontSize: 13)),
-                subtitle: const Text('Exact domain match', style: TextStyle(fontSize: 11)),
+                title: const Text('Exact', style: TextStyle(fontSize: 12)),
                 value: 'exact',
                 groupValue: filterKind,
                 onChanged: isLoading ? null : (value) => onFilterKindChanged(value!),
                 dense: true,
                 contentPadding: EdgeInsets.zero,
-                visualDensity: VisualDensity.compact,
+                visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
               ),
             ),
             Expanded(
               child: RadioListTile<String>(
-                title: const Text('Regex', style: TextStyle(fontSize: 13)),
-                subtitle: const Text('Pattern matching', style: TextStyle(fontSize: 11)),
+                title: const Text('Regex', style: TextStyle(fontSize: 12)),
                 value: 'regex',
                 groupValue: filterKind,
                 onChanged: isLoading ? null : (value) => onFilterKindChanged(value!),
                 dense: true,
                 contentPadding: EdgeInsets.zero,
-                visualDensity: VisualDensity.compact,
+                visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
               ),
             ),
           ],
         ),
 
-        const Divider(),
+        const SizedBox(height: 6),
 
         // Comment field
         const Text(
           'Comment (optional):',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         TextField(
           controller: commentController,
           enabled: !isLoading,
           decoration: InputDecoration(
             hintText: 'Add a note about this filter',
             isDense: true,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
             ),
           ),
-          style: const TextStyle(fontSize: 13),
+          style: const TextStyle(fontSize: 12),
         ),
 
-        const SizedBox(height: 12),
+        const SizedBox(height: 4),
 
         // Enabled checkbox
         CheckboxListTile(
-          title: const Text('Enabled', style: TextStyle(fontSize: 13)),
+          title: const Text('Enabled', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+          checkboxShape: CircleBorder(side: BorderSide(color: Colors.green[700]!, width: 1)),
           value: enabled,
           onChanged: isLoading ? null : onEnabledChanged,
           dense: true,
-          contentPadding: EdgeInsets.zero,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 0),
           visualDensity: VisualDensity.compact,
         ),
 
-        const Divider(),
+        const SizedBox(height: 4),
 
         // Group assignment
         const Text(
           'Assign to Groups:',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         
         // Groups list
         Container(
-          constraints: const BoxConstraints(maxHeight: 150),
+          height: 100,
           decoration: BoxDecoration(
             border: Border.all(color: Colors.grey[300]!),
             borderRadius: BorderRadius.circular(8),
           ),
           child: availableGroups.isEmpty
-              ? const Padding(
-                  padding: EdgeInsets.all(12.0),
-                  child: Center(
-                    child: Text(
-                      'No groups available',
-                      style: TextStyle(color: Colors.grey, fontSize: 12),
-                    ),
+              ? const Center(
+                  child: Text(
+                    'No groups available',
+                    style: TextStyle(color: Colors.grey, fontSize: 12),
                   ),
                 )
               : ListView.builder(
-                  shrinkWrap: true,
                   itemCount: availableGroups.length,
                   itemBuilder: (context, index) {
                     final group = availableGroups[index];
@@ -311,14 +367,9 @@ Widget addDomainFilterDialogContent({
                     return CheckboxListTile(
                       title: Text(
                         group.name,
-                        style: const TextStyle(fontSize: 13),
+                        style: const TextStyle(fontSize: 12),
                       ),
-                      subtitle: group.description.isNotEmpty
-                          ? Text(
-                              group.description,
-                              style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                            )
-                          : null,
+                      checkboxShape: CircleBorder(side: BorderSide(color: Colors.green[700]!, width: 1)),
                       value: isSelected,
                       onChanged: isLoading
                           ? null
@@ -328,8 +379,8 @@ Widget addDomainFilterDialogContent({
                               }
                             },
                       dense: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 8.0),
-                      visualDensity: VisualDensity.compact,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 0),
+                      visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                     );
                   },
                 ),
