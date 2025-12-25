@@ -20,7 +20,7 @@ class BuildableCommonDialog extends StatelessWidget {
     required this.title,
     this.subtitle,
     required this.content,
-    this.maxHeight = 480,
+    this.maxHeight = 400,
     this.maxWidth = 400,
     this.actions,
     this.isLoading = false,

@@ -82,7 +82,7 @@ class AddDomainFilterDialog {
               .setSubtitle(Text('Domain: $domain'))
               .setTitleIcon(Icons.filter_alt)
               .setWidth(400)
-              .setMaxHeight(460)
+              .setMaxHeight(510)
               .setContent(
                 addDomainFilterDialogContent(
                   domainFilter: domainFilter,

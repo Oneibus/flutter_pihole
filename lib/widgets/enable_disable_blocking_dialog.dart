@@ -24,76 +24,75 @@ class EnableDisableBlockingDialog {
         builder: (context, setState) {
           return DialogBuilder()
               .setTitle(isCurrentlyEnabled ? 'Disable Blocking' : 'Enable Blocking')
+              .setSpacable(true)
               .setWidth(450)
-              .setHeight(isCurrentlyEnabled ? (useDuration ? 240 : 160) : 150)
+              .setMaxHeight(isCurrentlyEnabled ? (useDuration ? 280 : 230) : 230)
               .setContent(
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (isCurrentlyEnabled) ...[
-                            // Only show options when disabling
-                            RadioListTile<bool>(
-                              title: const Text('Disable indefinitely'),
-                              value: false,
-                              groupValue: useDuration,
-                              onChanged: (value) {
-                                setState(() {
-                                  useDuration = value ?? false;
-                                });
-                              },
-                            ),
-                            RadioListTile<bool>(
-                              title: const Text('Disable for a specific time'),
-                              value: true,
-                              groupValue: useDuration,
-                              onChanged: (value) {
-                                setState(() {
-                                  useDuration = value ?? false;
-                                });
-                              },
-                            ),
-                            if (useDuration) ...[
-                              const SizedBox(height: 8),
-                              Padding(
-                                padding: const EdgeInsets.only(left: 32.0, right: 16.0),
-                                child: Row(
-                                  children: [
-                                    const Text('Duration (minutes):'),
-                                    const SizedBox(width: 12),
-                                    SizedBox(
-                                      width: 80,
-                                      child: TextField(
-                                        controller: durationController,
-                                        keyboardType: TextInputType.number,
-                                        inputFormatters: [
-                                          FilteringTextInputFormatter.digitsOnly,
-                                        ],
-                                        decoration: const InputDecoration(
-                                          border: OutlineInputBorder(),
-                                          contentPadding: EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 8,
-                                          ),
+                SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.all(2.0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (isCurrentlyEnabled) ...[
+                          // Only show options when disabling
+                          RadioListTile<bool>(
+                            title: const Text('Disable indefinitely'),
+                            value: false,
+                            groupValue: useDuration,
+                            onChanged: (value) {
+                              setState(() {
+                                useDuration = value ?? false;
+                              });
+                            },
+                          ),
+                          RadioListTile<bool>(
+                            title: const Text('Disable for time'),
+                            value: true,
+                            groupValue: useDuration,
+                            onChanged: (value) {
+                              setState(() {
+                                useDuration = value ?? false;
+                              });
+                            },
+                          ),
+                          if (useDuration) ...[
+                            const SizedBox(height: 4),
+                            Padding(
+                              padding: const EdgeInsets.only(left: 16.0, right: 16.0),
+                              child: Row(
+                                children: [
+                                  const Text('Duration (minutes):'),
+                                  const SizedBox(width: 12),
+                                  SizedBox(
+                                    width: 80,
+                                    child: TextField(
+                                      controller: durationController,
+                                      keyboardType: TextInputType.number,
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.digitsOnly,
+                                      ],
+                                      decoration: const InputDecoration(
+                                        border: OutlineInputBorder(),
+                                        contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 4,
+                                          vertical: 2,
                                         ),
                                       ),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ] else ...[
-                            const Padding(
-                              padding: EdgeInsets.all(16.0),
-                              child: Text('Enable DNS blocking?'),
                             ),
                           ],
+                        ] else ...[
+                          const Padding(
+                            padding: EdgeInsets.all(16.0),
+                            child: Text('Enable DNS blocking?'),
+                          ),
                         ],
-                      ),
+                      ],
                     ),
                   ),
                 ),

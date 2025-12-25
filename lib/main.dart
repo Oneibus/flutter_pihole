@@ -312,44 +312,6 @@ class _MasterDetailPageState extends State<MasterDetailPage> with WidgetsBinding
   }
 }
 
-// class UnusedCategoryListView extends StatelessWidget {
-//   final String category;
-//   const UnusedCategoryListView({super.key, required this.category});
-
-//   @override
-//   Widget build(BuildContext context) {
-
-//     final futureBuilder = FutureBuilder<List<dynamic>>(key: ValueKey(category), // reset when category changes
-//                                        future: dataService.fetchItems(category),
-//                                        builder: (context, snapshot) {
-//         if (snapshot.connectionState != ConnectionState.done) {
-//           return const Center(child: CircularProgressIndicator());
-//         }
-
-//         if (snapshot.hasError) {
-//           return Center(child: Text('Error: ${snapshot.error}'));
-//         }
-
-//         final items = snapshot.data ?? const <String>[];
-//         if (items.isEmpty) {
-//           return Center(child: Text('No $category found.'));
-//         }
-
-//         return ListView.separated(itemCount: items.length, separatorBuilder: (_, __) => const Divider(height: 1), itemBuilder: (context, index) {
-//             final item = items[index];
-//             return ListTile(title: Text(item, style: const TextStyle(fontSize: 10)), 
-//               onTap: () {
-//               // Optional: handle item tap
-//               });
-//           },
-//         );
-//       },
-//     );
-
-//     return futureBuilder;
-//   }
-// }
-
 typedef ItemUpdateCallback = Future<void> Function(String category, String name, Map<String, Object?> props);
 typedef RefreshCallback = void Function();
 
