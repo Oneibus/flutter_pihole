@@ -177,9 +177,9 @@ class _MasterDetailPageState extends State<MasterDetailPage>
             child: Container(
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
               child: Padding(
-                padding: const EdgeInsets.all(8.0),
+                padding: const EdgeInsets.all(4.0),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(8),
                   child: CategoryListView(
                     key: ValueKey(
                         '$_selectedCategory-$_refreshKey'), // Force rebuild when key changes

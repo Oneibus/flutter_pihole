@@ -126,7 +126,7 @@ class SortableHeaderCell extends StatelessWidget {
         maxWidth: 240,
       ),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10.0),
+        borderRadius: BorderRadius.circular(8.0),
       ),
       // Remove animation completely
       popUpAnimationStyle: AnimationStyle.noAnimation,
@@ -254,20 +254,43 @@ class SortableHeaderCell extends StatelessWidget {
 
   void _showFilterDialog(BuildContext context) {
     final controller = TextEditingController(text: filterText ?? '');
-
     showDialog(
-      context: context,
+      context: context, 
       builder: (context) => AlertDialog(
-        title: Text('Filter by $label'),
+        title: Container(
+          decoration: BoxDecoration(
+            color: Colors.green[800]!,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24), bottom: Radius.circular(0))
+          ),
+          padding: const EdgeInsets.all(12),
+          child: Text(
+            'Filter by $label',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w500,
+              fontSize: 16,
+            ),
+          ),
+        ),
+        titlePadding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
+        contentPadding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
+        actionsPadding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
         content: TextField(
           controller: controller,
           autofocus: true,
+          style: const TextStyle(fontSize: 14),
           decoration: InputDecoration(
             labelText: 'Filter prefix',
+            labelStyle: const TextStyle(fontSize: 12),
             hintText: 'Enter text to filter...',
-            border: const OutlineInputBorder(),
+            hintStyle: const TextStyle(fontSize: 12),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.0)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            isDense: true,
             suffixIcon: IconButton(
-              icon: const Icon(Icons.clear),
+              icon: const Icon(Icons.clear, size: 18),
+              padding: const EdgeInsets.all(4),
+              constraints: const BoxConstraints(),
               onPressed: () {
                 controller.clear();
               },
@@ -279,20 +302,24 @@ class SortableHeaderCell extends StatelessWidget {
           },
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
+          ElevatedButton.icon(
             onPressed: () {
               onFilterChanged(controller.text);
               Navigator.of(context).pop();
             },
+            icon: Icon(Icons.check, size: 12),
+            label: Text('Apply', style: TextStyle(fontSize: 12)),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green[700],
               foregroundColor: Colors.white,
+              // padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             ),
-            child: const Text('Apply'),
+          ),
+          const SizedBox(width: 2),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.of(context).pop(),
+            label: const Text('Cancel', style: TextStyle(fontSize: 12)),
+            icon: const Icon(Icons.cancel, size: 12),
           ),
         ],
       ),
