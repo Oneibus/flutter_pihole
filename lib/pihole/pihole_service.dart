@@ -63,7 +63,7 @@ class PiHoleService {
       case 'clients':
         final res = await _client.getClients();
         return (res.clients?.map((c) => {
-              'primary': c.hostname!.isNotEmpty ? c.hostname : c.hwaddr ?? '',
+              'primary': c.hostname!.isNotEmpty ? '${c.hwaddr} (${c.hostname})' : c.hwaddr,
               'secondary': c.comment ?? '',
               'status': c.groupIds?.map((id) => id.toString()).toList().join(', ') ?? '',
               'id': c.id,
@@ -118,7 +118,8 @@ class PiHoleService {
               'client': q.client.name ?? '',
               'domain': q.domain,
               'timestamp': q.time,
-              'redline': (q.status.toLowerCase().contains('deny')),
+              'redline': (q.status.toLowerCase().contains('deny') 
+                          || q.status.toLowerCase().contains('regex')),
             }).toList()) ?? [];
 
      case 'system':

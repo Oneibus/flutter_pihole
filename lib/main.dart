@@ -378,7 +378,7 @@ class _CategoryListViewState extends State<CategoryListView> {
           ),
 
           // status column
-          const SizedBox(width: 60, 
+          const SizedBox(width: 100, 
             child: Padding(
               padding: EdgeInsets.only(left: 0),
               child: Text('Status', 
@@ -549,7 +549,7 @@ class _CategoryListViewState extends State<CategoryListView> {
             // Status column
             if (status != null)
               SizedBox(
-                width: 60,
+                width: 100,
                 child: Padding(
                   padding: const EdgeInsets.only(left: 0),
                   child: Container(
@@ -557,13 +557,14 @@ class _CategoryListViewState extends State<CategoryListView> {
                     child: Text(
                       status,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: status.contains('disabled')
+                        color: redlined == true
                             ? Colors.red[900] 
                             : Colors.green[800],
                         fontSize: 10,
                         fontWeight: FontWeight.w400,
+                        
                       ),
-                      textAlign: TextAlign.center,
+                      textAlign: TextAlign.left,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
