@@ -8,6 +8,7 @@ import 'services/data_services.dart';
 import 'services/service_locator.dart';
 import 'widgets/edit_item_dialog.dart';
 import 'widgets/edit_client_groups_dialog.dart';
+import 'widgets/sortable_header.dart';
 
 void main() {
   // Setup dependency injection before running app
@@ -33,8 +34,8 @@ class MasterDetailPage extends StatefulWidget {
   State<MasterDetailPage> createState() => _MasterDetailPageState();
 }
 
-class _MasterDetailPageState extends State<MasterDetailPage> with WidgetsBindingObserver {
-
+class _MasterDetailPageState extends State<MasterDetailPage>
+    with WidgetsBindingObserver {
   SettingsService get settingsService => getIt<SettingsService>();
 
   static const categories = <String>[
@@ -111,16 +112,15 @@ class _MasterDetailPageState extends State<MasterDetailPage> with WidgetsBinding
         titleSpacing: 0,
         backgroundColor: const Color(0xFF222222),
       ),
-
       body: Row(
         children: [
           // Left panel
           Container(
             width: 100,
             color: Theme.of(context).colorScheme.surfaceContainerHighest,
-
             child: ListView.builder(
-              padding: const EdgeInsets.only(top: 8.0, bottom: 4.0, left: 8.0, right: 0.0),
+              padding: const EdgeInsets.only(
+                  top: 8.0, bottom: 4.0, left: 8.0, right: 0.0),
               itemCount: categories.length,
               itemBuilder: (ctx, i) {
                 final name = categories[i];
@@ -132,16 +132,24 @@ class _MasterDetailPageState extends State<MasterDetailPage> with WidgetsBinding
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: InkWell(
-                      onTap: _isRebooting ? null : () {
-                        setState(() {
-                          _selectedCategory = name;
-                        });
-                      },
+                      onTap: _isRebooting
+                          ? null
+                          : () {
+                              setState(() {
+                                _selectedCategory = name;
+                              });
+                            },
                       child: Container(
                         height: 48, // Fixed comfortable height
-                        alignment: Alignment.centerLeft, // Ensure text starts at left
-                        padding: const EdgeInsets.symmetric(horizontal: 8.0), // Manual padding
-                        color: selected ? Colors.green[200] : Theme.of(context).colorScheme.surface, // Selection background
+                        alignment:
+                            Alignment.centerLeft, // Ensure text starts at left
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8.0), // Manual padding
+                        color: selected
+                            ? Colors.green[200]
+                            : Theme.of(context)
+                                .colorScheme
+                                .surface, // Selection background
                         child: Text(
                           name,
                           maxLines: 1,
@@ -152,7 +160,8 @@ class _MasterDetailPageState extends State<MasterDetailPage> with WidgetsBinding
                             color: selected
                                 ? Colors.green[900]
                                 : Theme.of(context).colorScheme.onSurface,
-                            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                            fontWeight:
+                                selected ? FontWeight.bold : FontWeight.normal,
                           ),
                         ),
                       ),
@@ -172,14 +181,17 @@ class _MasterDetailPageState extends State<MasterDetailPage> with WidgetsBinding
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
                   child: CategoryListView(
-                    key: ValueKey('$_selectedCategory-$_refreshKey'), // Force rebuild when key changes
+                    key: ValueKey(
+                        '$_selectedCategory-$_refreshKey'), // Force rebuild when key changes
                     category: _selectedCategory,
                     isRebooting: _isRebooting,
                     onItemUpdate: (category, initialName, props) async {
                       if (props['delete'] == true) {
-                        await dataService.deleteItem(category, initialName, props: props);
+                        await dataService.deleteItem(category, initialName,
+                            props: props);
                       } else {
-                        await dataService.updateItem(category, initialName, props: props);
+                        await dataService.updateItem(category, initialName,
+                            props: props);
                       }
                       // Trigger refresh after update
                       setState(() {
@@ -204,7 +216,9 @@ class _MasterDetailPageState extends State<MasterDetailPage> with WidgetsBinding
           padding: const EdgeInsets.all(2.0),
           child: NavigationToolbar(
             middle: Text(
-              _isRebooting ? 'Connection pending...' : 'Connected to: ${_piholeHost ?? 'Unknown'}',
+              _isRebooting
+                  ? 'Connection pending...'
+                  : 'Connected to: ${_piholeHost ?? 'Unknown'}',
               style: const TextStyle(fontSize: 12),
             ),
           ),
@@ -274,7 +288,8 @@ class _MasterDetailPageState extends State<MasterDetailPage> with WidgetsBinding
     });
 
     // Listen to service readiness events
-    _serviceSubscription = dataService.systemEvents.serviceStream.listen((event) {
+    _serviceSubscription =
+        dataService.systemEvents.serviceStream.listen((event) {
       if (!mounted) return;
 
       String message;
@@ -312,7 +327,8 @@ class _MasterDetailPageState extends State<MasterDetailPage> with WidgetsBinding
   }
 }
 
-typedef ItemUpdateCallback = Future<void> Function(String category, String name, Map<String, Object?> props);
+typedef ItemUpdateCallback = Future<void> Function(
+    String category, String name, Map<String, Object?> props);
 typedef RefreshCallback = void Function();
 
 class CategoryListView extends StatefulWidget {
@@ -320,9 +336,9 @@ class CategoryListView extends StatefulWidget {
   final bool isRebooting;
   final ItemUpdateCallback? onItemUpdate;
   final RefreshCallback? onRefresh;
-  
+
   const CategoryListView({
-    super.key, 
+    super.key,
     required this.category,
     required this.isRebooting,
     this.onItemUpdate,
@@ -336,6 +352,95 @@ class CategoryListView extends StatefulWidget {
 class _CategoryListViewState extends State<CategoryListView> {
   // Reboot state is now managed by parent and passed via widget.isRebooting
 
+  // Sorting and filtering state
+  String? _sortColumn;
+  SortOrder _sortOrder = SortOrder.none;
+  final Map<String, String> _columnFilters = {};
+  List<dynamic> _filteredAndSortedItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  void _toggleSort(String column) {
+    setState(() {
+      if (_sortColumn == column) {
+        // When clicking on an already sorted column, just toggle between ascending/descending
+        // Note: This is called when clicking the dropdown menu
+        // Direct icon clicks will use a different path
+        switch (_sortOrder) {
+          case SortOrder.none:
+            _sortOrder = SortOrder.ascending;
+            break;
+          case SortOrder.ascending:
+            _sortOrder = SortOrder.descending;
+            break;
+          case SortOrder.descending:
+            _sortOrder = SortOrder.none;
+            _sortColumn = null;
+            break;
+        }
+      } else {
+        _sortColumn = column;
+        _sortOrder = SortOrder.ascending;
+      }
+    });
+  }
+
+  void _toggleSortDirect(String column) {
+    setState(() {
+      // Direct toggle only switches between ascending/descending, never to none
+      if (_sortColumn == column) {
+        _sortOrder = _sortOrder == SortOrder.ascending
+            ? SortOrder.descending
+            : SortOrder.ascending;
+      } else {
+        // If clicking on a different column's sort icon, start with ascending
+        _sortColumn = column;
+        _sortOrder = SortOrder.ascending;
+      }
+    });
+  }
+
+  void _setFilter(String column, String filterText) {
+    setState(() {
+      if (filterText.isEmpty) {
+        _columnFilters.remove(column);
+      } else {
+        _columnFilters[column] = filterText;
+      }
+    });
+  }
+
+  List<dynamic> _applyFiltersAndSort(List<dynamic> items) {
+    var result = List<dynamic>.from(items);
+
+    // Apply filters
+    for (var entry in _columnFilters.entries) {
+      final column = entry.key;
+      final filter = entry.value.toLowerCase();
+
+      result = result.where((item) {
+        final value = item[column]?.toString().toLowerCase() ?? '';
+        return value.startsWith(filter);
+      }).toList();
+    }
+
+    // Apply sorting
+    if (_sortColumn != null && _sortOrder != SortOrder.none) {
+      result.sort((a, b) {
+        final aValue = a[_sortColumn]?.toString() ?? '';
+        final bValue = b[_sortColumn]?.toString() ?? '';
+
+        final comparison = aValue.compareTo(bValue);
+        return _sortOrder == SortOrder.ascending ? comparison : -comparison;
+      });
+    }
+
+    return result;
+  }
+
   Widget _buildHeaderRow(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
@@ -344,48 +449,55 @@ class _CategoryListViewState extends State<CategoryListView> {
           bottom: BorderSide(color: Colors.grey[400]!, width: 1),
         ),
       ),
-
-      padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 2),
-      child: Row( 
+      padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 2),
+      child: Row(
         children: [
-          // item number
-          const SizedBox(width: 30, 
-            child: Text('#', 
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500))),
-
-          // primary column
-          const Expanded(
-            flex: 3,
+          // item number - not sortable
+          const SizedBox(
+            width: 30,
             child: Padding(
-              padding: EdgeInsets.only(left: 0),
-              child: Text('Name', 
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
-                textAlign: TextAlign.left,
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                '#',
+                style:
+                    TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
               ),
             ),
           ),
 
-          // secondary column
-          const Expanded(
+          // primary column - sortable and filterable
+          SortableHeaderCell(
+            label: 'Name',
+            isExpanded: true,
             flex: 3,
-            child: Padding(
-              padding: EdgeInsets.only(left: 0),
-              child: Text('Details', 
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
-                textAlign: TextAlign.left,
-              ),
-            ),
+            sortOrder: _sortColumn == 'primary' ? _sortOrder : SortOrder.none,
+            filterText: _columnFilters['primary'],
+            onSort: () => _toggleSort('primary'),
+            onSortDirect: () => _toggleSortDirect('primary'),
+            onFilterChanged: (text) => _setFilter('primary', text),
           ),
 
-          // status column
-          const SizedBox(width: 100, 
-            child: Padding(
-              padding: EdgeInsets.only(left: 0),
-              child: Text('Status', 
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
-                textAlign: TextAlign.left,
-              ),
-            ),
+          // secondary column - sortable and filterable
+          SortableHeaderCell(
+            label: 'Details',
+            isExpanded: true,
+            flex: 3,
+            sortOrder: _sortColumn == 'secondary' ? _sortOrder : SortOrder.none,
+            filterText: _columnFilters['secondary'],
+            onSort: () => _toggleSort('secondary'),
+            onSortDirect: () => _toggleSortDirect('secondary'),
+            onFilterChanged: (text) => _setFilter('secondary', text),
+          ),
+
+          // status column - sortable and filterable
+          SortableHeaderCell(
+            label: 'Status',
+            width: 100,
+            sortOrder: _sortColumn == 'status' ? _sortOrder : SortOrder.none,
+            filterText: _columnFilters['status'],
+            onSort: () => _toggleSort('status'),
+            onSortDirect: () => _toggleSortDirect('status'),
+            onFilterChanged: (text) => _setFilter('status', text),
           ),
         ],
       ),
@@ -403,97 +515,94 @@ class _CategoryListViewState extends State<CategoryListView> {
     bool redlined = item['redline'] == true;
 
     return InkWell(
-      onTap: (mounted && widget.onItemUpdate != null && !widget.isRebooting) ? () async {
-        if (widget.category.toLowerCase() == 'clients') {
-          // Parse client ID from primary (assuming it's the first part)
-          final groups = await dataService.getGroupsForClient(id);
+      onTap: (mounted && widget.onItemUpdate != null && !widget.isRebooting)
+          ? () async {
+              if (widget.category.toLowerCase() == 'clients') {
+                // Parse client ID from primary (assuming it's the first part)
+                final groups = await dataService.getGroupsForClient(id);
 
-          await EditClientGroupsDialog.show(
-            context: context,
-            category: widget.category,
-            clientId: id,
-            clientName: primary ?? '',
-            availableGroups: groups,
-            onUpdate: (clientId, groupIds) async {
-              await dataService.updateClientGroups(clientId, groupIds);
-            },
-          );
-          return;
-        }
-
-        // Create controllers that will be managed by the dialog
-        final nameController = TextEditingController(text: primary ?? '');
-        final commentController = TextEditingController(text: secondary ?? '');
-        String currentStatus = status ?? 'disabled';
-        String currentType = type ?? 'unknown';
-        String currentKind = kind ?? 'unknown';
-
-        await DynamicItemEditDialog.show(
-          context, 
-          Icons.edit, 
-          widget.category, 
-
-          editItemDialogContent(
-            context,
-            widget.category,
-            nameController,
-            commentController,
-            currentStatus,
-            (String value) => primary = value,
-            (String value) => secondary = value,
-            (String? value) => currentStatus = value ?? currentStatus,
-            (String? value) => currentType = value ?? currentType,
-            (String? value) => currentKind = value ?? currentKind,
-          ), 
-
-          () async {
-            // Save callback
-            if (mounted && widget.onItemUpdate != null) {
-              await widget.onItemUpdate!(
-                widget.category, 
-                primary ?? '', 
-                {
-                  // RFJ: refactor to use property names per category
-                  'name': nameController.text,
-                  'comment': commentController.text.isEmpty ? null : commentController.text,
-                  'enabled': currentStatus == 'enabled',
-                  'delete': currentStatus == 'delete',
-                  'type': currentType,
-                  'kind': currentKind,
-                },
-              );
-              if (mounted) {
-                Navigator.of(context).pop();
+                await EditClientGroupsDialog.show(
+                  context: context,
+                  category: widget.category,
+                  clientId: id,
+                  clientName: primary ?? '',
+                  availableGroups: groups,
+                  onUpdate: (clientId, groupIds) async {
+                    await dataService.updateClientGroups(clientId, groupIds);
+                  },
+                );
+                return;
               }
-            }
-            // Dispose controllers after save
-            nameController.dispose();
-            commentController.dispose();
-          },
 
-          () {
-            // Cancel callback
-            if (mounted) {
-              Navigator.of(context).pop();
-            }
-            // Dispose controllers after cancel
-            nameController.dispose();
-            commentController.dispose();
-          }
-        );
-      } : null,
+              // Create controllers that will be managed by the dialog
+              final nameController = TextEditingController(text: primary ?? '');
+              final commentController =
+                  TextEditingController(text: secondary ?? '');
+              String currentStatus = status ?? 'disabled';
+              String currentType = type ?? 'unknown';
+              String currentKind = kind ?? 'unknown';
 
+              await DynamicItemEditDialog.show(
+                  context,
+                  Icons.edit,
+                  widget.category,
+                  editItemDialogContent(
+                    context,
+                    widget.category,
+                    nameController,
+                    commentController,
+                    currentStatus,
+                    (String value) => primary = value,
+                    (String value) => secondary = value,
+                    (String? value) => currentStatus = value ?? currentStatus,
+                    (String? value) => currentType = value ?? currentType,
+                    (String? value) => currentKind = value ?? currentKind,
+                  ), () async {
+                // Save callback
+                if (mounted && widget.onItemUpdate != null) {
+                  await widget.onItemUpdate!(
+                    widget.category,
+                    primary ?? '',
+                    {
+                      // RFJ: refactor to use property names per category
+                      'name': nameController.text,
+                      'comment': commentController.text.isEmpty
+                          ? null
+                          : commentController.text,
+                      'enabled': currentStatus == 'enabled',
+                      'delete': currentStatus == 'delete',
+                      'type': currentType,
+                      'kind': currentKind,
+                    },
+                  );
+                  if (mounted) {
+                    Navigator.of(context).pop();
+                  }
+                }
+                // Dispose controllers after save
+                nameController.dispose();
+                commentController.dispose();
+              }, () {
+                // Cancel callback
+                if (mounted) {
+                  Navigator.of(context).pop();
+                }
+                // Dispose controllers after cancel
+                nameController.dispose();
+                commentController.dispose();
+              });
+            }
+          : null,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
         decoration: BoxDecoration(
-          color: (redlined == true) ?
-                    Colors.red[100] :  
-                    (index.isEven ? Colors.lightGreen[50] : Colors.white),
+          color: (redlined == true)
+              ? Colors.red[100]
+              : (index.isEven ? Colors.lightGreen[50] : Colors.white),
           border: Border(
             bottom: BorderSide(color: Colors.grey[300]!, width: 0.5),
           ),
         ),
-
         child: Row(
           children: [
             // Index/Number column
@@ -504,10 +613,10 @@ class _CategoryListViewState extends State<CategoryListView> {
                 child: Text(
                   '${index + 1}',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.green[900],
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
-                  ),
+                        color: Colors.green[900],
+                        fontSize: 12,
+                        fontWeight: FontWeight.w400,
+                      ),
                 ),
               ),
             ),
@@ -520,31 +629,31 @@ class _CategoryListViewState extends State<CategoryListView> {
                 child: Text(
                   primary ?? '',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
-                  ),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w400,
+                      ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
             ),
-            
+
             // Secondary content column
             if (secondary != null)
               Expanded(
-              flex: 3,
-              child: Padding(
-                padding: const EdgeInsets.only(left: 0),
-                child: Text(
-                  secondary ?? '',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
-                    color: Colors.grey[800],
+                flex: 3,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 0),
+                  child: Text(
+                    secondary ?? '',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w400,
+                          color: Colors.grey[800],
+                        ),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-            ),
 
             // Status column
             if (status != null)
@@ -553,17 +662,17 @@ class _CategoryListViewState extends State<CategoryListView> {
                 child: Padding(
                   padding: const EdgeInsets.only(left: 0),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     child: Text(
                       status,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: redlined == true
-                            ? Colors.red[900] 
-                            : Colors.green[800],
-                        fontSize: 10,
-                        fontWeight: FontWeight.w400,
-                        
-                      ),
+                            color: redlined == true
+                                ? Colors.red[900]
+                                : Colors.green[800],
+                            fontSize: 10,
+                            fontWeight: FontWeight.w400,
+                          ),
                       textAlign: TextAlign.left,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -588,9 +697,10 @@ class _CategoryListViewState extends State<CategoryListView> {
               return const Center(child: CircularProgressIndicator());
             }
 
-            if (snapshot.connectionState == ConnectionState.done && snapshot.hasError) {
-                return Center(child: Text('Error: ${snapshot.error}'));
-                // return const Center(child: CircularProgressIndicator(color: Colors.orange));
+            if (snapshot.connectionState == ConnectionState.done &&
+                snapshot.hasError) {
+              return Center(child: Text('Error: ${snapshot.error}'));
+              // return const Center(child: CircularProgressIndicator(color: Colors.orange));
             }
             // if (snapshot.hasError){
             //   return Center(child: Text('Error: ${snapshot.error}'));
@@ -598,10 +708,13 @@ class _CategoryListViewState extends State<CategoryListView> {
 
             final items = snapshot.data ?? const <String>[];
             if (widget.category == 'System') {
-              return dataService.buildSystemDialog(context: context);  
+              return dataService.buildSystemDialog(context: context);
             } else if (items.isEmpty) {
               return Center(child: Text('No ${widget.category} found.'));
             }
+
+            // Apply filters and sorting
+            _filteredAndSortedItems = _applyFiltersAndSort(items);
 
             // Table-like layout with full rows and columns
             return Column(
@@ -612,21 +725,45 @@ class _CategoryListViewState extends State<CategoryListView> {
                 Expanded(
                   child: Container(
                     color: Colors.white, // Background color for the list area
-                    child: RefreshIndicator(
-                      onRefresh: () async {
-                        // Call parent's refresh callback to increment _refreshKey
-                        if (widget.onRefresh != null) {
-                          widget.onRefresh!();
-                        }
-                        // Small delay for the refresh animation
-                        await Future.delayed(const Duration(milliseconds: 300));
-                      },
-                      child: ListView.builder(
-                        itemCount: items.length,
-                        itemBuilder: (context, index) =>
-                            _buildItemRow(context, items[index], index),
-                      ),
-                    ),
+                    child: _filteredAndSortedItems.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.filter_alt_off,
+                                  size: 48,
+                                  color: Colors.grey[400],
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'No items match the current filters',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : RefreshIndicator(
+                            onRefresh: () async {
+                              // Call parent's refresh callback to increment _refreshKey
+                              if (widget.onRefresh != null) {
+                                widget.onRefresh!();
+                              }
+                              // Small delay for the refresh animation
+                              await Future.delayed(
+                                  const Duration(milliseconds: 300));
+                            },
+                            child: ListView.builder(
+                              itemCount: _filteredAndSortedItems.length,
+                              itemBuilder: (context, index) => _buildItemRow(
+                                  context,
+                                  _filteredAndSortedItems[index],
+                                  index),
+                            ),
+                          ),
                   ),
                 ),
               ],
@@ -650,16 +787,16 @@ class _CategoryListViewState extends State<CategoryListView> {
                   Text(
                     'System is rebooting...',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: Colors.deepOrange,
-                      fontWeight: FontWeight.bold,
-                    ),
+                          color: Colors.deepOrange,
+                          fontWeight: FontWeight.bold,
+                        ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Please wait while the system restarts',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.deepOrange[200],
-                    ),
+                          color: Colors.deepOrange[200],
+                        ),
                   ),
                 ],
               ),
