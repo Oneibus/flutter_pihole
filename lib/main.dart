@@ -357,10 +357,43 @@ class _CategoryListViewState extends State<CategoryListView> {
   SortOrder _sortOrder = SortOrder.none;
   final Map<String, String> _columnFilters = {};
   List<dynamic> _filteredAndSortedItems = [];
+  
+  // Cache for original items from API
+  List<dynamic>? _cachedItems;
+  bool _isLoading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
+    _fetchItems();
+  }
+  
+  Future<void> _fetchItems() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    
+    try {
+      final items = await dataService.fetchItems(widget.category);
+      // Add original index to each item for display purposes
+      final itemsWithIndex = items.asMap().entries.map((entry) {
+        final item = Map<String, dynamic>.from(entry.value);
+        item['_originalIndex'] = entry.key + 1; // Store 1-based index
+        return item;
+      }).toList();
+      
+      setState(() {
+        _cachedItems = itemsWithIndex;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
   }
 
   void _toggleSort(String column) {
@@ -611,7 +644,7 @@ class _CategoryListViewState extends State<CategoryListView> {
               child: Padding(
                 padding: const EdgeInsets.only(left: 0),
                 child: Text(
-                  '${index + 1}',
+                  '${item['_originalIndex'] ?? (index + 1)}',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Colors.green[900],
                         fontSize: 12,
@@ -687,88 +720,81 @@ class _CategoryListViewState extends State<CategoryListView> {
 
   @override
   Widget build(BuildContext context) {
+    // Handle loading state
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    
+    // Handle error state
+    if (_error != null) {
+      return Center(child: Text('Error: $_error'));
+    }
+    
+    // Handle special System category
+    if (widget.category == 'System') {
+      return dataService.buildSystemDialog(context: context);
+    }
+    
+    // Handle empty data
+    final items = _cachedItems ?? [];
+    if (items.isEmpty) {
+      return Center(child: Text('No ${widget.category} found.'));
+    }
+    
+    // Apply filters and sorting to cached data
+    _filteredAndSortedItems = _applyFiltersAndSort(items);
+    
     return Stack(
       children: [
-        FutureBuilder<List<dynamic>>(
-          key: ValueKey(widget.category), // reset when category changes
-          future: dataService.fetchItems(widget.category),
-          builder: (context, snapshot) {
-            while (snapshot.connectionState != ConnectionState.done) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            if (snapshot.connectionState == ConnectionState.done &&
-                snapshot.hasError) {
-              return Center(child: Text('Error: ${snapshot.error}'));
-              // return const Center(child: CircularProgressIndicator(color: Colors.orange));
-            }
-            // if (snapshot.hasError){
-            //   return Center(child: Text('Error: ${snapshot.error}'));
-            // }
-
-            final items = snapshot.data ?? const <String>[];
-            if (widget.category == 'System') {
-              return dataService.buildSystemDialog(context: context);
-            } else if (items.isEmpty) {
-              return Center(child: Text('No ${widget.category} found.'));
-            }
-
-            // Apply filters and sorting
-            _filteredAndSortedItems = _applyFiltersAndSort(items);
-
-            // Table-like layout with full rows and columns
-            return Column(
-              children: [
-                // Header row
-                _buildHeaderRow(context),
-                // Data rows
-                Expanded(
-                  child: Container(
-                    color: Colors.white, // Background color for the list area
-                    child: _filteredAndSortedItems.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.filter_alt_off,
-                                  size: 48,
-                                  color: Colors.grey[400],
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'No items match the current filters',
-                                  style: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ],
+        Column(
+          children: [
+            // Header row
+            _buildHeaderRow(context),
+            // Data rows
+            Expanded(
+              child: Container(
+                color: Colors.white, // Background color for the list area
+                child: _filteredAndSortedItems.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.filter_alt_off,
+                              size: 48,
+                              color: Colors.grey[400],
                             ),
-                          )
-                        : RefreshIndicator(
-                            onRefresh: () async {
-                              // Call parent's refresh callback to increment _refreshKey
-                              if (widget.onRefresh != null) {
-                                widget.onRefresh!();
-                              }
-                              // Small delay for the refresh animation
-                              await Future.delayed(
-                                  const Duration(milliseconds: 300));
-                            },
-                            child: ListView.builder(
-                              itemCount: _filteredAndSortedItems.length,
-                              itemBuilder: (context, index) => _buildItemRow(
-                                  context,
-                                  _filteredAndSortedItems[index],
-                                  index),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No items match the current filters',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 16,
+                              ),
                             ),
-                          ),
-                  ),
-                ),
-              ],
-            );
-          },
+                          ],
+                        ),
+                      )
+                    : RefreshIndicator(
+                        onRefresh: () async {
+                          // Re-fetch from API
+                          await _fetchItems();
+                          // Call parent's refresh callback if provided
+                          if (widget.onRefresh != null) {
+                            widget.onRefresh!();
+                          }
+                        },
+                        child: ListView.builder(
+                          itemCount: _filteredAndSortedItems.length,
+                          itemBuilder: (context, index) => _buildItemRow(
+                              context,
+                              _filteredAndSortedItems[index],
+                              index),
+                        ),
+                      ),
+              ),
+            ),
+          ],
         ),
 
         // Overlay circular progress indicator when rebooting
