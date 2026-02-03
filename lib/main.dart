@@ -9,6 +9,7 @@ import 'services/service_locator.dart';
 import 'widgets/edit_item_dialog.dart';
 import 'widgets/edit_client_groups_dialog.dart';
 import 'widgets/sortable_header.dart';
+import 'widgets/collapsible_panel.dart';
 
 void main() {
   // Setup dependency injection before running app
@@ -52,6 +53,23 @@ class _MasterDetailPageState extends State<MasterDetailPage>
   bool _isRebooting = false; // Track reboot state
   String? _piholeHost = '';
 
+  // Key to control the collapsible panel
+  final GlobalKey<CollapsiblePanelState> _panelKey =
+      GlobalKey<CollapsiblePanelState>();
+
+  // Auto-collapse timer
+  Timer? _autoCollapseTimer;
+  static const Duration _autoCollapseDelay = Duration(seconds: 3);
+  bool _isHoveringLeftPanel = false;
+  bool _hasPendingCollapse = false;
+
+  // Key to measure right panel layout
+  final GlobalKey _rightPanelKey = GlobalKey();
+
+  // Track window size for resize/rotation detection
+  Size? _previousSize;
+  Timer? _resizeDebounceTimer;
+
   StreamSubscription<RebootEvent>? _rebootSubscription;
   StreamSubscription<ServiceReadinessEvent>? _serviceSubscription;
 
@@ -64,6 +82,8 @@ class _MasterDetailPageState extends State<MasterDetailPage>
 
   @override
   void dispose() {
+    _autoCollapseTimer?.cancel();
+    _resizeDebounceTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     dataService.systemEvents.dispose();
     super.dispose();
@@ -77,6 +97,81 @@ class _MasterDetailPageState extends State<MasterDetailPage>
       // on mobile OSs due to strict background limits, but it helps.
       dataService.logout();
     }
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+
+    // Get current size
+    final currentSize = MediaQuery.of(context).size;
+
+    // Check if size actually changed (orientation or window resize)
+    if (_previousSize != null &&
+        (_previousSize!.width != currentSize.width ||
+            _previousSize!.height != currentSize.height)) {
+      // Cancel any pending collapse
+      _autoCollapseTimer?.cancel();
+      _hasPendingCollapse = false;
+
+      // Expand panel immediately
+      _panelKey.currentState?.expand();
+
+      // Debounce: wait for resize/rotation to complete before starting timer
+      _resizeDebounceTimer?.cancel();
+      _resizeDebounceTimer = Timer(const Duration(milliseconds: 500), () {
+        if (mounted) {
+          // Start auto-collapse timer if not hovering
+          if (!_isHoveringLeftPanel) {
+            _startAutoCollapseTimer();
+          } else {
+            _hasPendingCollapse = true;
+          }
+        }
+      });
+    }
+
+    _previousSize = currentSize;
+  }
+
+  /// Start auto-collapse timer after category selection
+  void _startAutoCollapseTimer() {
+    // Cancel any existing timer
+    _autoCollapseTimer?.cancel();
+
+    // If hovering over left panel, mark as pending and wait
+    if (_isHoveringLeftPanel) {
+      _hasPendingCollapse = true;
+      return;
+    }
+
+    // Start new timer
+    _autoCollapseTimer = Timer(_autoCollapseDelay, () {
+      if (!mounted) return;
+
+      // Check if content needs more space before collapsing
+      if (_shouldAutoCollapse()) {
+        _panelKey.currentState?.collapse();
+      }
+    });
+  }
+
+  /// Check if the panel should auto-collapse based on available space
+  bool _shouldAutoCollapse() {
+    // Always collapse on narrow screens (phones in portrait)
+    final screenWidth = MediaQuery.of(context).size.width;
+    if (screenWidth < 600) {
+      return true;
+    }
+
+    // For larger screens, check if we have enough space
+    // If right panel has plenty of room, don't collapse
+    if (screenWidth > 1200) {
+      return false;
+    }
+
+    // For medium screens, collapse to give more room
+    return true;
   }
 
   // Initialize application and load initial DNS blocking status
@@ -114,66 +209,88 @@ class _MasterDetailPageState extends State<MasterDetailPage>
       ),
       body: Row(
         children: [
-          // Left panel
-          Container(
-            width: 100,
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            child: ListView.builder(
-              padding: const EdgeInsets.only(
-                  top: 8.0, bottom: 4.0, left: 8.0, right: 0.0),
-              itemCount: categories.length,
-              itemBuilder: (ctx, i) {
-                final name = categories[i];
-                final selected = _selectedCategory == name;
+          // Left panel - now collapsible
+          MouseRegion(
+            onEnter: (_) {
+              setState(() {
+                _isHoveringLeftPanel = true;
+              });
+            },
+            onExit: (_) {
+              setState(() {
+                _isHoveringLeftPanel = false;
+              });
+              // If there's a pending collapse, start the timer now
+              if (_hasPendingCollapse) {
+                _hasPendingCollapse = false;
+                _startAutoCollapseTimer();
+              }
+            },
+            child: CollapsiblePanel(
+              key: _panelKey,
+              expandedWidth: 100,
+              collapsedWidth: 8,
+              child: ListView.builder(
+                padding: const EdgeInsets.only(
+                    top: 8.0, bottom: 4.0, left: 8.0, right: 0.0),
+                itemCount: categories.length,
+                itemBuilder: (ctx, i) {
+                  final name = categories[i];
+                  final selected = _selectedCategory == name;
 
-                // Use InkWell + Container instead of ListTile for narrow columns
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 4.0),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: InkWell(
-                      onTap: _isRebooting
-                          ? null
-                          : () {
-                              setState(() {
-                                _selectedCategory = name;
-                              });
-                            },
-                      child: Container(
-                        height: 48, // Fixed comfortable height
-                        alignment:
-                            Alignment.centerLeft, // Ensure text starts at left
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8.0), // Manual padding
-                        color: selected
-                            ? Colors.green[200]
-                            : Theme.of(context)
-                                .colorScheme
-                                .surface, // Selection background
-                        child: Text(
-                          name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: selected ? 14 : 12,
-                            // Use onSurface so it adapts to Dark/Light mode automatically
-                            color: selected
-                                ? Colors.green[900]
-                                : Theme.of(context).colorScheme.onSurface,
-                            fontWeight:
-                                selected ? FontWeight.bold : FontWeight.normal,
+                  // Use InkWell + Container instead of ListTile for narrow columns
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4.0),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: InkWell(
+                        onTap: _isRebooting
+                            ? null
+                            : () {
+                                setState(() {
+                                  _selectedCategory = name;
+                                });
+                                // Start auto-collapse timer after selection
+                                _startAutoCollapseTimer();
+                              },
+                        child: Container(
+                          height: 48, // Fixed comfortable height
+                          alignment: Alignment
+                              .centerLeft, // Ensure text starts at left
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8.0), // Manual padding
+                          color: selected
+                              ? Colors.green[200]
+                              : Theme.of(context)
+                                  .colorScheme
+                                  .surface, // Selection background
+                          child: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: selected ? 14 : 12,
+                              // Use onSurface so it adapts to Dark/Light mode automatically
+                              color: selected
+                                  ? Colors.green[900]
+                                  : Theme.of(context).colorScheme.onSurface,
+                              fontWeight: selected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           ),
           const VerticalDivider(width: 2),
           // Right panel with rounded corners and matching background
           Expanded(
+            key: _rightPanelKey,
             child: Container(
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
               child: Padding(
@@ -333,6 +450,8 @@ typedef RefreshCallback = void Function();
 
 class CategoryListView extends StatefulWidget {
   final String category;
+  final String? param1;
+  final String? param2;
   final bool isRebooting;
   final ItemUpdateCallback? onItemUpdate;
   final RefreshCallback? onRefresh;
@@ -343,6 +462,8 @@ class CategoryListView extends StatefulWidget {
     required this.isRebooting,
     this.onItemUpdate,
     this.onRefresh,
+    this.param1,
+    this.param2,
   });
 
   @override
@@ -350,14 +471,12 @@ class CategoryListView extends StatefulWidget {
 }
 
 class _CategoryListViewState extends State<CategoryListView> {
-  // Reboot state is now managed by parent and passed via widget.isRebooting
-
   // Sorting and filtering state
   String? _sortColumn;
   SortOrder _sortOrder = SortOrder.none;
   final Map<String, String> _columnFilters = {};
   List<dynamic> _filteredAndSortedItems = [];
-  
+
   // Cache for original items from API
   List<dynamic>? _cachedItems;
   bool _isLoading = true;
@@ -368,22 +487,23 @@ class _CategoryListViewState extends State<CategoryListView> {
     super.initState();
     _fetchItems();
   }
-  
+
   Future<void> _fetchItems() async {
     setState(() {
       _isLoading = true;
       _error = null;
     });
-    
+
     try {
-      final items = await dataService.fetchItems(widget.category);
+      final items = await dataService.fetchItems(widget.category,
+          param1: widget.param1, param2: widget.param2);
       // Add original index to each item for display purposes
       final itemsWithIndex = items.asMap().entries.map((entry) {
         final item = Map<String, dynamic>.from(entry.value);
         item['_originalIndex'] = entry.key + 1; // Store 1-based index
         return item;
       }).toList();
-      
+
       setState(() {
         _cachedItems = itemsWithIndex;
         _isLoading = false;
@@ -724,26 +844,26 @@ class _CategoryListViewState extends State<CategoryListView> {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-    
+
     // Handle error state
     if (_error != null) {
       return Center(child: Text('Error: $_error'));
     }
-    
+
     // Handle special System category
     if (widget.category == 'System') {
       return dataService.buildSystemDialog(context: context);
     }
-    
+
     // Handle empty data
     final items = _cachedItems ?? [];
     if (items.isEmpty) {
       return Center(child: Text('No ${widget.category} found.'));
     }
-    
+
     // Apply filters and sorting to cached data
     _filteredAndSortedItems = _applyFiltersAndSort(items);
-    
+
     return Stack(
       children: [
         Column(
@@ -787,9 +907,7 @@ class _CategoryListViewState extends State<CategoryListView> {
                         child: ListView.builder(
                           itemCount: _filteredAndSortedItems.length,
                           itemBuilder: (context, index) => _buildItemRow(
-                              context,
-                              _filteredAndSortedItems[index],
-                              index),
+                              context, _filteredAndSortedItems[index], index),
                         ),
                       ),
               ),

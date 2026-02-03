@@ -45,7 +45,7 @@ class PiHoleService {
   }
 
   // Convenience: map categories in your UI to calls
-  Future<List<dynamic>> listForCategory(String category) async {
+  Future<List<dynamic>> listForCategory(String category, {String? param1, String? param2}) async {
     switch (category.toLowerCase()) {
       case 'groups':
         final res = await _client.getGroups();
@@ -109,7 +109,7 @@ class PiHoleService {
             }).toList()) ?? [];
 
       case 'queries':
-        final res = await _client.getQueries();
+        final res = await _client.getQueries(client: param1, upstream: param2); // fetch last 1000 queries
         return (res.queries?.map((q) => {
               'primary': q.domain,
               'secondary': q.client.name ?? q.client.ip,

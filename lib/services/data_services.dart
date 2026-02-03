@@ -49,8 +49,8 @@ class DataService {
     await _piHoleService.logout();
   }
 
-  Future<List<dynamic>> fetchItems(String category) {
-    return _piHoleService.listForCategory(category);
+  Future<List<dynamic>> fetchItems(String category, {String? param1, String? param2}) {
+    return _piHoleService.listForCategory(category, param1: null, param2: null);
   }
 
   Future<bool> updateItem(String category, String itemName, {Map<String, Object?>? props}) {

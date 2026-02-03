@@ -290,10 +290,12 @@ class PiHoleClient {
     return NetworkDevicesResponse.fromJson(jsonMap);
   }
 
-  Future<QueriesResponse> getQueries({int? since, int? until}) async {
+  Future<QueriesResponse> getQueries({int? from, int? until, String? client, String? upstream}) async {
     final qp = <String, String>{};
-    if (since != null) qp['since'] = '$since';
+    if (from != null) qp['from'] = '$from';
     if (until != null) qp['until'] = '$until';
+    if (client != null) qp['client_name'] = client;
+    if (upstream != null) qp['upstream'] = upstream;
     final jsonMap = await _get('queries', query: qp.isEmpty ? null : qp);
     return QueriesResponse.fromJson(jsonMap);
   }
