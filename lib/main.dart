@@ -207,125 +207,135 @@ class _MasterDetailPageState extends State<MasterDetailPage>
         titleSpacing: 0,
         backgroundColor: const Color(0xFF222222),
       ),
-      body: Row(
-        children: [
-          // Left panel - now collapsible
-          MouseRegion(
-            onEnter: (_) {
-              setState(() {
-                _isHoveringLeftPanel = true;
-              });
-            },
-            onExit: (_) {
-              setState(() {
-                _isHoveringLeftPanel = false;
-              });
-              // If there's a pending collapse, start the timer now
-              if (_hasPendingCollapse) {
-                _hasPendingCollapse = false;
-                _startAutoCollapseTimer();
-              }
-            },
-            child: CollapsiblePanel(
-              key: _panelKey,
-              expandedWidth: 100,
-              collapsedWidth: 8,
-              child: ListView.builder(
-                padding: const EdgeInsets.only(
-                    top: 8.0, bottom: 4.0, left: 8.0, right: 0.0),
-                itemCount: categories.length,
-                itemBuilder: (ctx, i) {
-                  final name = categories[i];
-                  final selected = _selectedCategory == name;
+      body: GestureDetector(
+        onTap: () {
+          // On mobile: any tap reopens panel if collapsed
+          final panelState = _panelKey.currentState;
+          if (panelState != null && !panelState.isExpanded) {
+            panelState.expand();
+          }
+          // If already expanded, taps pass through to child widgets
+        },
+        child: Row(
+          children: [
+            // Left panel - now collapsible
+            MouseRegion(
+              onEnter: (_) {
+                setState(() {
+                  _isHoveringLeftPanel = true;
+                });
+              },
+              onExit: (_) {
+                setState(() {
+                  _isHoveringLeftPanel = false;
+                });
+                // If there's a pending collapse, start the timer now
+                if (_hasPendingCollapse) {
+                  _hasPendingCollapse = false;
+                  _startAutoCollapseTimer();
+                }
+              },
+              child: CollapsiblePanel(
+                key: _panelKey,
+                expandedWidth: 100,
+                collapsedWidth: 8,
+                child: ListView.builder(
+                  padding: const EdgeInsets.only(
+                      top: 8.0, bottom: 4.0, left: 8.0, right: 0.0),
+                  itemCount: categories.length,
+                  itemBuilder: (ctx, i) {
+                    final name = categories[i];
+                    final selected = _selectedCategory == name;
 
-                  // Use InkWell + Container instead of ListTile for narrow columns
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 4.0),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: InkWell(
-                        onTap: _isRebooting
-                            ? null
-                            : () {
-                                setState(() {
-                                  _selectedCategory = name;
-                                });
-                                // Start auto-collapse timer after selection
-                                _startAutoCollapseTimer();
-                              },
-                        child: Container(
-                          height: 48, // Fixed comfortable height
-                          alignment: Alignment
-                              .centerLeft, // Ensure text starts at left
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8.0), // Manual padding
-                          color: selected
-                              ? Colors.green[200]
-                              : Theme.of(context)
-                                  .colorScheme
-                                  .surface, // Selection background
-                          child: Text(
-                            name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: selected ? 14 : 12,
-                              // Use onSurface so it adapts to Dark/Light mode automatically
-                              color: selected
-                                  ? Colors.green[900]
-                                  : Theme.of(context).colorScheme.onSurface,
-                              fontWeight: selected
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
+                    // Use InkWell + Container instead of ListTile for narrow columns
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 4.0),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: InkWell(
+                          onTap: _isRebooting
+                              ? null
+                              : () {
+                                  setState(() {
+                                    _selectedCategory = name;
+                                  });
+                                  // Start auto-collapse timer after selection
+                                  _startAutoCollapseTimer();
+                                },
+                          child: Container(
+                            height: 48, // Fixed comfortable height
+                            alignment: Alignment
+                                .centerLeft, // Ensure text starts at left
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8.0), // Manual padding
+                            color: selected
+                                ? Colors.green[200]
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .surface, // Selection background
+                            child: Text(
+                              name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: selected ? 14 : 12,
+                                // Use onSurface so it adapts to Dark/Light mode automatically
+                                color: selected
+                                    ? Colors.green[900]
+                                    : Theme.of(context).colorScheme.onSurface,
+                                fontWeight: selected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
-          ),
-          const VerticalDivider(width: 2),
-          // Right panel with rounded corners and matching background
-          Expanded(
-            key: _rightPanelKey,
-            child: Container(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              child: Padding(
-                padding: const EdgeInsets.all(4.0),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: CategoryListView(
-                    key: ValueKey(
-                        '$_selectedCategory-$_refreshKey'), // Force rebuild when key changes
-                    category: _selectedCategory,
-                    isRebooting: _isRebooting,
-                    onItemUpdate: (category, initialName, props) async {
-                      if (props['delete'] == true) {
-                        await dataService.deleteItem(category, initialName,
-                            props: props);
-                      } else {
-                        await dataService.updateItem(category, initialName,
-                            props: props);
-                      }
-                      // Trigger refresh after update
-                      setState(() {
-                        _refreshKey++;
-                      });
-                    },
-                    onRefresh: () {
-                      setState(() {
-                        _refreshKey++;
-                      });
-                    },
+            const VerticalDivider(width: 2),
+            // Right panel with rounded corners and matching background
+            Expanded(
+              key: _rightPanelKey,
+              child: Container(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                child: Padding(
+                  padding: const EdgeInsets.all(4.0),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: CategoryListView(
+                      key: ValueKey(
+                          '$_selectedCategory-$_refreshKey'), // Force rebuild when key changes
+                      category: _selectedCategory,
+                      isRebooting: _isRebooting,
+                      onItemUpdate: (category, initialName, props) async {
+                        if (props['delete'] == true) {
+                          await dataService.deleteItem(category, initialName,
+                              props: props);
+                        } else {
+                          await dataService.updateItem(category, initialName,
+                              props: props);
+                        }
+                        // Trigger refresh after update
+                        setState(() {
+                          _refreshKey++;
+                        });
+                      },
+                      onRefresh: () {
+                        setState(() {
+                          _refreshKey++;
+                        });
+                      },
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
       bottomNavigationBar: BottomAppBar(
         height: 48,

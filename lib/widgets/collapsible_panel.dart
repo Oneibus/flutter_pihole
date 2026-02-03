@@ -46,6 +46,9 @@ class CollapsiblePanelState extends State<CollapsiblePanel>
   late Animation<double> _widthAnimation;
   bool _isExpanded = true;
 
+  /// Check if the panel is currently expanded
+  bool get isExpanded => _isExpanded;
+
   @override
   void initState() {
     super.initState();
