@@ -17,6 +17,10 @@ void main() {
   runApp(const MyApp());
 }
 
+  // Key to control the collapsible panel
+  final GlobalKey<CollapsiblePanelState> _panelKey =
+      GlobalKey<CollapsiblePanelState>();
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
   @override
@@ -52,10 +56,6 @@ class _MasterDetailPageState extends State<MasterDetailPage>
   int _refreshKey = 0; // Key to force refresh
   bool _isRebooting = false; // Track reboot state
   String? _piholeHost = '';
-
-  // Key to control the collapsible panel
-  final GlobalKey<CollapsiblePanelState> _panelKey =
-      GlobalKey<CollapsiblePanelState>();
 
   // Auto-collapse timer
   Timer? _autoCollapseTimer;
@@ -193,30 +193,30 @@ class _MasterDetailPageState extends State<MasterDetailPage>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            Image.asset(
-              'assets/images/PiHoleControl.png',
-              height: 56,
-              width: 185,
-            ),
-          ],
+    return GestureDetector(
+      onTap: () {
+        // On mobile: any tap reopens panel if collapsed
+        final panelState = _panelKey.currentState;
+        if (panelState != null && !panelState.isExpanded) {
+          panelState.expand();
+        }
+        // If already expanded, taps pass through to child widgets
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Row(
+            children: [
+              Image.asset(
+                'assets/images/PiHoleControl.png',
+                height: 56,
+                width: 185,
+              ),
+            ],
+          ),
+          titleSpacing: 0,
+          backgroundColor: const Color(0xFF222222),
         ),
-        titleSpacing: 0,
-        backgroundColor: const Color(0xFF222222),
-      ),
-      body: GestureDetector(
-        onTap: () {
-          // On mobile: any tap reopens panel if collapsed
-          final panelState = _panelKey.currentState;
-          if (panelState != null && !panelState.isExpanded) {
-            panelState.expand();
-          }
-          // If already expanded, taps pass through to child widgets
-        },
-        child: Row(
+        body: Row(
           children: [
             // Left panel - now collapsible
             MouseRegion(
@@ -237,7 +237,7 @@ class _MasterDetailPageState extends State<MasterDetailPage>
               },
               child: CollapsiblePanel(
                 key: _panelKey,
-                expandedWidth: 100,
+                expandedWidth: 120,
                 collapsedWidth: 8,
                 child: ListView.builder(
                   padding: const EdgeInsets.only(
@@ -336,17 +336,17 @@ class _MasterDetailPageState extends State<MasterDetailPage>
             ),
           ],
         ),
-      ),
-      bottomNavigationBar: BottomAppBar(
-        height: 48,
-        child: Padding(
-          padding: const EdgeInsets.all(2.0),
-          child: NavigationToolbar(
-            middle: Text(
-              _isRebooting
-                  ? 'Connection pending...'
-                  : 'Connected to: ${_piholeHost ?? 'Unknown'}',
-              style: const TextStyle(fontSize: 12),
+        bottomNavigationBar: BottomAppBar(
+          height: 48,
+          child: Padding(
+            padding: const EdgeInsets.all(2.0),
+            child: NavigationToolbar(
+              middle: Text(
+                _isRebooting
+                    ? 'Connection pending...'
+                    : 'Connected to: ${_piholeHost ?? 'Unknown'}',
+                style: const TextStyle(fontSize: 12),
+              ),
             ),
           ),
         ),
@@ -680,6 +680,13 @@ class _CategoryListViewState extends State<CategoryListView> {
     return InkWell(
       onTap: (mounted && widget.onItemUpdate != null && !widget.isRebooting)
           ? () async {
+              // On mobile: any tap reopens panel if collapsed
+              final panelState = _panelKey.currentState;
+              if (panelState != null && !panelState.isExpanded) {
+                panelState.expand();
+                return;
+              }
+
               if (widget.category.toLowerCase() == 'clients') {
                 // Parse client ID from primary (assuming it's the first part)
                 final groups = await dataService.getGroupsForClient(id);
