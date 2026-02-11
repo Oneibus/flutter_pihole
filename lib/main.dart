@@ -239,6 +239,16 @@ class _MasterDetailPageState extends State<MasterDetailPage>
                 key: _panelKey,
                 expandedWidth: 120,
                 collapsedWidth: 8,
+              child: GestureDetector(
+                onTap: () {
+                  // On mobile (no mouse), first tap expands if collapsed
+                  final panelState = _panelKey.currentState;
+                  if (panelState != null && !panelState.isExpanded) {
+                    panelState.expand();
+                  }
+                  // If already expanded, let child widgets handle the tap
+                },
+                behavior: HitTestBehavior.translucent,
                 child: ListView.builder(
                   padding: const EdgeInsets.only(
                       top: 8.0, bottom: 4.0, left: 8.0, right: 0.0),
